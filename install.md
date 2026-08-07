@@ -37,13 +37,41 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapt
 git clone https://github.com/ShawnPana/phone-harness ~/Projects/phone-harness
 cd ~/Projects/phone-harness
 pip install pyobjc-framework-Quartz pyobjc-framework-Vision pyobjc-framework-AppKit
-./phone-harness --doctor
-./phone-harness <<'PY'
+pip install -e . --no-deps            # installs the global `phone-harness` command
+
+# register as an agent skill so Claude Code / Codex auto-use it (see below)
+mkdir -p ~/.claude/skills/phone-harness
+phone-harness skill > ~/.claude/skills/phone-harness/SKILL.md
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills/phone-harness"
+phone-harness skill > "${CODEX_HOME:-$HOME/.codex}/skills/phone-harness/SKILL.md"
+
+phone-harness --doctor
+phone-harness <<'PY'
 print(screen_info())
 PY
 ```
 
 If `screen_info()` prints window bounds, you're done.
+
+`pip install -e .` keeps the source (and its `agent-workspace/`) editable while
+giving you a `phone-harness` command on PATH — the editable install is what lets
+the skill call `phone-harness` from any directory. If your Python can't reach
+PyPI to resolve the pyobjc deps, `--no-deps` skips them (they're installed by
+the line above).
+
+## Register as a skill
+
+So the agent reaches for phone-harness on its own, register `SKILL.md` as a
+skill named `phone-harness` with `phone-harness skill` as its body (the Fast
+Path does this for both Claude Code and Codex). The skill's trigger is:
+
+```text
+Control the user's iPhone through the Mac's iPhone Mirroring window: open apps,
+tap, type, swipe, read the screen.
+```
+
+Re-run the `phone-harness skill > …/SKILL.md` lines after pulling updates so the
+registered copy stays current.
 
 ## If It Fails
 

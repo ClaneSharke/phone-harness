@@ -26,10 +26,13 @@ Paste into Claude Code or Codex:
 ```text
 Set up phone-harness for me. Clone https://github.com/ShawnPana/phone-harness
 and read `install.md` first to install it and connect it to my real iPhone
-through the macOS iPhone Mirroring app. Then read `SKILL.md` for normal usage,
-and always read `src/phone_harness/helpers.py` because that is where the
-functions are. Whenever you capture or verify the screen, activate the iPhone
-Mirroring window so I can see what you're doing on the phone.
+through the macOS iPhone Mirroring app — install it so `phone-harness` is a
+command on my PATH, and register it as an agent skill named phone-harness using
+`phone-harness skill` as the body, so you reach for it automatically. Then read
+`SKILL.md` for normal usage, and always read `src/phone_harness/helpers.py`
+because that is where the functions are. Whenever you capture or verify the
+screen, activate the iPhone Mirroring window so I can see what you're doing on
+the phone.
 
 Setup needs two things only I can do: pairing iPhone Mirroring with my phone
 once, and granting the terminal Accessibility + Screen Recording in System
@@ -86,8 +89,9 @@ print([o["text"] for o in ocr()][:10])
 PY
 ```
 
-Day-to-day workflow lives in [SKILL.md](SKILL.md) — register it as an agent
-skill with `./phone-harness skill`. `install.md` covers first-time setup.
+Day-to-day workflow lives in [SKILL.md](SKILL.md), which [install.md](install.md)
+registers as an agent skill (`phone-harness skill` prints the body) so the agent
+reaches for it on its own.
 
 ## Architecture
 
