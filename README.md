@@ -50,6 +50,11 @@ Security. Screen Recording takes effect after the terminal restarts;
 Accessibility is immediate. Then `./phone-harness --doctor` verifies the whole
 chain.
 
+These are the permissions currently known to be required. A fresh machine may
+prompt for more the first time an action runs — if `--doctor` passes but taps or
+capture silently do nothing, watch for a macOS permission prompt. See
+[install.md](install.md) for details.
+
 ## Why this works
 
 iPhone Mirroring (macOS Sequoia+) renders the phone as a Mac window and forwards

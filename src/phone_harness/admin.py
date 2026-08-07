@@ -63,4 +63,8 @@ def run_doctor():
             os.unlink(path)
 
     print("\nall clear" if ok else "\nfix the FAILs above, then re-run")
+    print("\nnote: these are the permissions currently known to be required. A "
+          "fresh\nmachine may still prompt for more the first time an action "
+          "runs — approve\nthem in System Settings if a step silently does "
+          "nothing despite this passing.")
     return 0 if ok else 1

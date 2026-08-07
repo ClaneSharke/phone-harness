@@ -21,6 +21,16 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibil
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
 ```
 
+> **Heads up — you may need to grant more than these two.** Accessibility and
+> Screen Recording are the permissions we *know* are required, and they're all
+> `--doctor` currently checks. But this was built on a machine that was already
+> permissive, so a fresh Mac may prompt for additional approvals the first time
+> an action runs. If `--doctor` passes but taps, typing, or capture silently do
+> nothing, watch for a macOS permission prompt and check System Settings >
+> Privacy & Security for a pane asking to approve your terminal. As we pin down
+> exactly which extra permissions a clean install needs, they'll get added to
+> `--doctor` as proper prerequisites.
+
 ## Fast Path
 
 ```bash
