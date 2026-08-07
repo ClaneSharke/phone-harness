@@ -34,8 +34,8 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapt
 ## Fast Path
 
 ```bash
-git clone https://github.com/ShawnPana/phone-harness ~/Projects/phone-harness
-cd ~/Projects/phone-harness
+git clone https://github.com/ShawnPana/phone-harness   # clones into ./phone-harness
+cd phone-harness                                       # keep it wherever you like
 pip install pyobjc-framework-Quartz pyobjc-framework-Vision pyobjc-framework-AppKit
 pip install -e . --no-deps            # installs the global `phone-harness` command
 
@@ -53,11 +53,14 @@ PY
 
 If `screen_info()` prints window bounds, you're done.
 
-`pip install -e .` keeps the source (and its `agent-workspace/`) editable while
-giving you a `phone-harness` command on PATH — the editable install is what lets
-the skill call `phone-harness` from any directory. If your Python can't reach
-PyPI to resolve the pyobjc deps, `--no-deps` skips them (they're installed by
-the line above).
+Clone it anywhere you like — the commands above use the current directory, no
+`~/Projects` assumed. `pip install -e .` keeps the source (and its
+`agent-workspace/`) editable while giving you a `phone-harness` command on PATH,
+which is what lets the skill call `phone-harness` from any directory. Because
+the install is editable it's bound to the clone's location, so don't move the
+folder afterward (or just re-run `pip install -e .` if you do). If your Python
+can't reach PyPI to resolve the pyobjc deps, `--no-deps` skips them (they're
+installed by the line above).
 
 ## Register as a skill
 
