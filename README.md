@@ -1,7 +1,6 @@
 # Phone Harness 📱
 
-Connect an LLM directly to your real iPhone with a thin, editable harness — in
-the spirit of prior work.
+Connect an LLM directly to your real iPhone with a thin, editable harness.
 No jailbreak, no Xcode, no WebDriverAgent.
 
 The Mac's iPhone Mirroring window is the whole transport: `screencapture` +
