@@ -81,17 +81,28 @@ def ensure_window(timeout=15.0):
 
 # --- capture ---
 
-def capture(path=None):
+def capture(path=None, retries=2):
     """Capture just the mirroring window (works even if partly covered).
 
     Returns (path, window_bounds). -o omits the drop shadow so image pixels
-    map linearly onto the window rect.
+    map linearly onto the window rect. The window id can go stale between
+    lookup and capture (the mirroring window is re-created on some redraws), so
+    on failure we re-query a fresh window and retry.
     """
-    win = ensure_window()
     path = str(path or TMP / "window.png")
-    subprocess.run(
-        ["screencapture", "-x", "-o", "-l", str(win["id"]), path], check=True)
-    return path, win
+    last = None
+    for attempt in range(retries + 1):
+        win = find_window()
+        if win is None:
+            win = ensure_window()
+        r = subprocess.run(
+            ["screencapture", "-x", "-o", "-l", str(win["id"]), path],
+            capture_output=True)
+        if r.returncode == 0 and Path(path).exists() and Path(path).stat().st_size > 1000:
+            return path, win
+        last = r.stderr.decode(errors="replace").strip() or "empty capture"
+        time.sleep(0.3)
+    raise RuntimeError(f"window capture failed after {retries + 1} tries: {last}")
 
 
 # --- input primitives ---

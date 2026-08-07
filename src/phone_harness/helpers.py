@@ -97,6 +97,147 @@ def scroll(amount=300):
     mirror.scroll_wheel(-amount, w["x"] + w["w"] / 2, w["y"] + w["h"] / 2)
 
 
+# --- scrolling through lists ---
+#
+# End-of-list is decided by whether the SCREEN MOVED, never by whether the
+# caller's parser found new items. A dense list or a missed OCR row must not
+# read as "done" — only the pixels going still (after a settle window that lets
+# lazy-loaded content arrive) means the end.
+
+def _content_texts(min_conf=0.4, top_frac=0.06, bottom_frac=0.92):
+    """OCR of the scrollable content area, excluding the volatile status bar
+    (clock/battery) at top and the nav/home strip at bottom."""
+    path, win = mirror.capture()
+    top = win["y"] + win["h"] * top_frac
+    bot = win["y"] + win["h"] * bottom_frac
+    return [o for o in _ocr.recognize(path, win)
+            if top < o["y"] < bot and o["confidence"] >= min_conf]
+
+
+def _text_set(boxes):
+    return frozenset(o["text"].strip() for o in boxes if o["text"].strip())
+
+
+def _overlap(a, b):
+    """Jaccard overlap of two text sets: ~1.0 = same screen, low = it moved."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def scroll_screen(direction="up", amount=0.6, settle=2.5, moved_thresh=0.6):
+    """One scroll gesture, then wait for the screen to settle (so a lazy-load
+    spinner resolves before we judge movement).
+
+    Returns {moved, overlap, before, after, boxes} — `boxes` is the settled
+    content OCR, ready to parse. `moved` is False when overlap >= moved_thresh:
+    the list didn't advance. The default 0.6 sits in the empirical gap between
+    real forward progress (overlap < ~0.45) and overscroll bounce at a boundary
+    (overlap > ~0.7), which springs the content and would otherwise read as
+    movement and defeat end-detection.
+    """
+    w = mirror.ensure_window()
+    sign = {"up": -1, "down": 1}.get(direction)  # 'up' reveals content below
+    if sign is None:
+        raise ValueError(f"direction must be 'up' or 'down', got {direction!r}")
+    before = _text_set(_content_texts())
+    # Wheel scroll, not drag: a slow touch-drag barely moves an iOS list and
+    # bounces back, while wheel events advance it deterministically (proven on
+    # long lists). amount is a fraction of window height.
+    mirror.scroll_wheel(sign * int(w["h"] * amount),
+                        w["x"] + w["w"] / 2, w["y"] + w["h"] / 2, steps=10)
+    time.sleep(0.4)
+    prev_boxes, prev = None, None
+    deadline = time.time() + settle
+    while time.time() < deadline:
+        boxes = _content_texts()
+        cur = _text_set(boxes)
+        if cur == prev:                 # two identical captures = settled
+            break
+        prev, prev_boxes = cur, boxes
+        time.sleep(0.35)
+    after = prev or frozenset()
+    return {"moved": _overlap(before, after) < moved_thresh,
+            "overlap": round(_overlap(before, after), 3),
+            "before": before, "after": after, "boxes": prev_boxes or []}
+
+
+def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
+    """Scroll until `done(boxes)` is truthy or the list stops moving.
+
+    `done` receives the current content OCR (list of boxes) and returns a
+    truthy value to stop; that value is returned. Returns None if the end of
+    the list is reached first.
+    """
+    boxes = _content_texts()
+    hit = done(boxes)
+    if hit:
+        return hit
+    stale = 0
+    for _ in range(max_scrolls):
+        res = scroll_screen(direction, amount, settle)
+        hit = done(res["boxes"])
+        if hit:
+            return hit
+        if res["moved"]:
+            stale = 0
+        else:
+            stale += 1
+            if stale >= 2:              # confirmed still after a retry
+                return None
+            time.sleep(0.8)
+            mirror.activate()
+    return None
+
+
+def scroll_collect(extract=None, key=None, direction="up", amount=0.6,
+                   max_scrolls=400, end_after=3, settle=2.5, on_progress=None):
+    """Scroll a list top-to-bottom, extracting and de-duping items each screen,
+    until the list reaches its true end.
+
+    - extract(boxes) -> list of items for the current screen. Default returns
+      each content text line, so a bare scroll_collect() gathers all text.
+    - key(item) -> hashable de-dup key (default: the item itself).
+    - Stops after `end_after` consecutive non-moving scrolls (the settle window
+      already gave lazy-load a chance), or `max_scrolls`.
+
+    Returns {items, stop, scrolls}. `stop` is 'reached-end' or 'max-scrolls'.
+    Use amount < 1.0 so screens overlap and no row falls between captures.
+    """
+    extract = extract or (lambda boxes: [o["text"].strip() for o in boxes
+                                         if o["text"].strip()])
+    key = key or (lambda x: x)
+    seen, order = set(), []
+
+    def ingest(boxes):
+        new = 0
+        for item in extract(boxes):
+            k = key(item)
+            if k in seen:
+                continue
+            seen.add(k)
+            order.append(item)
+            new += 1
+        return new
+
+    ingest(_content_texts())
+    stale = 0
+    for i in range(1, max_scrolls + 1):
+        res = scroll_screen(direction, amount, settle)
+        new = ingest(res["boxes"])
+        if on_progress:
+            on_progress(i, len(order), new, res["moved"], res["overlap"])
+        if res["moved"]:
+            stale = 0
+        else:
+            stale += 1
+            if stale >= end_after:
+                return {"items": order, "stop": "reached-end", "scrolls": i}
+            time.sleep(0.8)            # extra grace for a slow lazy-load
+            mirror.activate()
+    return {"items": order, "stop": "max-scrolls", "scrolls": max_scrolls}
+
+
 # --- navigation ---
 
 def home():

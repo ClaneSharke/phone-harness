@@ -45,6 +45,16 @@ PY
 - Navigation: `home()`, `app_switcher()`, `open_app("Notes")` (Spotlight),
   `swipe("up")`, `scroll()`, `type_text("...")`, `press("return")`,
   `long_press(x, y)`.
+- **Scrolling a list**: use `scroll_collect(extract, key=...)` to walk a list
+  to its true end, de-duping as it goes — it returns `{items, stop, scrolls}`
+  where `stop` is `'reached-end'` or `'max-scrolls'`. Use `scroll_until(done)`
+  to stop when a predicate on the visible OCR is met. Both decide "done" from
+  whether the **screen actually moved**, not from whether your parser found
+  new rows — a dense screen or a missed OCR line will not end the scroll
+  early. Each step settles first so lazy-loaded content arrives before the
+  movement check. `scroll_screen()` is the single-step primitive if you need
+  it. These use wheel scrolling (a slow touch-drag barely moves an iOS list
+  and bounces back).
 - Raw Quartz is the escape hatch: `import Quartz` in your script for anything
   the helpers don't cover.
 
