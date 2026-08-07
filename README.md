@@ -25,7 +25,8 @@ Paste into Claude Code or Codex:
 
 ```text
 Set up phone-harness for me. Clone https://github.com/ShawnPana/phone-harness
-and read `install.md` first to install it and connect it to my real iPhone
+into ~/.phone-harness (its canonical home) and read `install.md` first to install
+it and connect it to my real iPhone
 through the macOS iPhone Mirroring app — install it so `phone-harness` is a
 command on my PATH, and register it as an agent skill named phone-harness using
 `phone-harness skill` as the body, so you reach for it automatically. Then read

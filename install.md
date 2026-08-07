@@ -34,8 +34,8 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapt
 ## Fast Path
 
 ```bash
-git clone https://github.com/ShawnPana/phone-harness   # clones into ./phone-harness
-cd phone-harness                                       # keep it wherever you like
+git clone https://github.com/ShawnPana/phone-harness ~/.phone-harness   # canonical home
+cd ~/.phone-harness
 pip install pyobjc-framework-Quartz pyobjc-framework-Vision pyobjc-framework-AppKit
 pip install -e . --no-deps            # installs the global `phone-harness` command
 
@@ -53,14 +53,15 @@ PY
 
 If `screen_info()` prints window bounds, you're done.
 
-Clone it anywhere you like — the commands above use the current directory, no
-`~/Projects` assumed. `pip install -e .` keeps the source (and its
-`agent-workspace/`) editable while giving you a `phone-harness` command on PATH,
-which is what lets the skill call `phone-harness` from any directory. Because
-the install is editable it's bound to the clone's location, so don't move the
-folder afterward (or just re-run `pip install -e .` if you do). If your Python
-can't reach PyPI to resolve the pyobjc deps, `--no-deps` skips them (they're
-installed by the line above).
+`~/.phone-harness` is the canonical home — a hidden folder in your home
+directory (like `~/.oh-my-zsh` or `~/.nvm`), so the code, `helpers.py`,
+`SKILL.md`, and your `agent-workspace/` always live at a path the agent knows,
+on any machine. `pip install -e .` keeps that source editable while giving you a
+`phone-harness` command on PATH, which is what lets the skill call
+`phone-harness` from any directory. Because the install is editable it's bound
+to that location, so keep the folder at `~/.phone-harness` (or re-run `pip
+install -e .` if you relocate it). If your Python can't reach PyPI to resolve the
+pyobjc deps, `--no-deps` skips them (they're installed by the line above).
 
 ## Register as a skill
 
