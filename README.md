@@ -1,12 +1,12 @@
 # Phone Harness 📱
 
-Connect an LLM directly to a real iPhone through macOS iPhone Mirroring — a
-thin, editable harness in the spirit of
-prior work.
+Connect an LLM directly to your real iPhone with a thin, editable harness — in
+the spirit of prior work.
+No jailbreak, no Xcode, no WebDriverAgent.
 
-No jailbreak, no Xcode, no WebDriverAgent. The Mac's mirroring window is the
-transport: `screencapture` + Vision-framework OCR for eyes, HID-level CGEvents
-for hands. The agent writes what's missing during execution in
+The Mac's iPhone Mirroring window is the whole transport: `screencapture` +
+Vision-framework OCR for eyes, HID-level CGEvents for hands. Nothing between the
+agent and the phone. The agent writes what's missing during execution in
 `agent-workspace/agent_helpers.py`.
 
 ```
@@ -14,35 +14,62 @@ for hands. The agent writes what's missing during execution in
   │
   ● ocr() → "Weather" at (400, 468)
   │
-  ● tap(400, 468) → wait_stable() → ocr() confirms forecast
+  ● tap(400, 468) → wait_stable() → ocr() confirms the forecast
   ✓ done
 ```
 
+**Your phone, driven by an agent.**
+
+## Setup prompt
+
+Paste into Claude Code or Codex:
+
+```text
+Set up phone-harness for me. Clone https://github.com/ShawnPana/phone-harness
+and read `install.md` first to install it and connect it to my real iPhone
+through the macOS iPhone Mirroring app. Then read `SKILL.md` for normal usage,
+and always read `src/phone_harness/helpers.py` because that is where the
+functions are. Whenever you capture or verify the screen, activate the iPhone
+Mirroring window so I can see what you're doing on the phone.
+
+Setup needs two things only I can do: pairing iPhone Mirroring with my phone
+once, and granting the terminal Accessibility + Screen Recording in System
+Settings — walk me through those and wait for me. Verify with
+`./phone-harness --doctor`.
+
+After it's installed, as a quick demo that interaction works, go to my Home
+Screen and — if the phone is connected and unlocked — ask me whether you should
+open the Weather app as a harmless test; only open it if I say yes. If the
+session is paused or the phone is locked, just tell me the doctor status instead.
+```
+
+The agent will walk you through the two things only you can do: **pairing**
+iPhone Mirroring with your phone once (the pairing prompts need the physical
+phone), and granting the terminal **Accessibility** (taps & keystrokes) and
+**Screen Recording** (seeing the phone) in System Settings → Privacy &
+Security. Screen Recording takes effect after the terminal restarts;
+Accessibility is immediate. Then `./phone-harness --doctor` verifies the whole
+chain.
+
 ## Why this works
 
-iPhone Mirroring renders the phone as a Mac window and forwards real mouse and
-keyboard input as touches. That gives an agent everything it needs:
+iPhone Mirroring (macOS Sequoia+) renders the phone as a Mac window and forwards
+real mouse and keyboard input as touches. That gives an agent everything it
+needs:
 
-- **See** — capture just the mirroring window (`screencapture -l`), OCR it
-  with Apple's Vision framework: every visible string with a tap-ready
-  coordinate. The poor man's DOM.
-- **Act** — CGEvents posted at the HID tap: taps, long-presses, drags
-  (swipes), scroll gestures, unicode typing, and the app's own shortcuts
-  (Cmd+1 Home, Cmd+2 App Switcher, Cmd+3 Spotlight).
+- **See** — capture just the mirroring window, OCR it with Apple's Vision
+  framework: every visible string with a tap-ready coordinate. The poor man's
+  DOM.
+- **Act** — CGEvents posted at the HID tap: taps, long-presses, drags/flicks,
+  scroll gestures, unicode typing, and the app's own shortcuts (Cmd+1 Home,
+  Cmd+2 App Switcher, Cmd+3 Spotlight).
 - **Verify** — screenshot again. No DOM means the capture is the ground truth.
 
-Things that do NOT work, learned the hard way: AppleScript `click at`
-(silently ignored — the window is a video stream with no accessibility tree),
-and input while the window isn't frontmost (swallowed).
-
-## Setup
-
-Read [install.md](install.md). Short version: pair iPhone Mirroring once,
-grant the terminal Accessibility + Screen Recording, then:
-
-```bash
-./phone-harness --doctor
-```
+Things that do NOT work, learned the hard way: AppleScript `click at` (silently
+ignored — the window is a video stream with no accessibility tree), unicode key
+payloads (mirroring forwards raw HID keycodes, so typing must use keycodes), a
+slow touch-drag (barely moves an iOS list — use wheel scroll for lists, a fast
+flick for pages), and input while the window isn't frontmost (swallowed).
 
 ## Usage
 
@@ -56,7 +83,7 @@ PY
 ```
 
 Day-to-day workflow lives in [SKILL.md](SKILL.md) — register it as an agent
-skill with `./phone-harness skill`.
+skill with `./phone-harness skill`. `install.md` covers first-time setup.
 
 ## Architecture
 
@@ -68,11 +95,21 @@ skill with `./phone-harness skill`.
   - `helpers.py` — the primitives pre-imported into scripts
   - `admin.py` — `--doctor`
   - `run.py` — the CLI (`exec` stdin with helpers in scope)
-- `agent-workspace/agent_helpers.py` — helper code the agent edits; auto-
-  loaded into every script's namespace
+- `agent-workspace/agent_helpers.py` — helper code the agent edits; auto-loaded
+  into every script's namespace
 
-The mirror transport is stateless (window bounds and captures are re-queried
-per call), so there is no daemon — every invocation is self-contained.
+The mirror transport is stateless (window bounds and captures are re-queried per
+call), so there is no daemon — every invocation is self-contained.
+
+## Development
+
+From a checkout, use `./phone-harness` to run the working tree directly:
+
+```bash
+./phone-harness <<'PY'
+print(screen_info())
+PY
+```
 
 ## Limits
 

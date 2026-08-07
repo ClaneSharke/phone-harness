@@ -24,7 +24,9 @@ open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapt
 ## Fast Path
 
 ```bash
+git clone https://github.com/ShawnPana/phone-harness ~/Projects/phone-harness
 cd ~/Projects/phone-harness
+pip install pyobjc-framework-Quartz pyobjc-framework-Vision pyobjc-framework-AppKit
 ./phone-harness --doctor
 ./phone-harness <<'PY'
 print(screen_info())
