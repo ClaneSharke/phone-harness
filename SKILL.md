@@ -65,6 +65,22 @@ hard to reverse: sending a message, posting, purchasing, deleting, changing
 settings. Navigating and reading for the user's own task is fine, but don't
 linger in personal content (Messages, Photos, Mail) beyond what the task needs.
 
+## Connection is the user's job
+
+The harness never connects the phone for you. Connecting or resuming mirroring
+is a physical action — opening the app, approving the prompt, and (crucially)
+**locking the iPhone when it says "iPhone in Use"** — that only the user can do.
+
+`ensure_mirroring()` gates every task on this: if the phone isn't connected it
+raises a clear message (call `connection_state()` yourself to check —
+`ready` / `blocked` / `no-window` / `not-running`). When you hit that:
+
+- **STOP and relay the message. Ask the user to connect the phone themselves.**
+- **Never** tap `Connect` / `Continue`, and **never** loop-poll waiting for the
+  connection. Tapping Connect while the phone is unlocked does nothing, and
+  polling just burns time — the only fix is the user locking/connecting the
+  phone. Retry once *after they confirm they've done it*, not before.
+
 ## Gotchas
 
 - **Unfocused input is swallowed silently.** The window must be frontmost;
@@ -73,9 +89,9 @@ linger in personal content (Messages, Photos, Mail) beyond what the task needs.
   it; AppleScript `click at` fails silently. Only HID-level CGEvents work.
 - **The window moves.** Never cache coordinates across calls; `ocr()` and
   `swipe()` re-query bounds every time.
-- **Unlocking the physical phone pauses the session.** The window then shows a
-  resume interstitial — `ocr()` will show its text; tap through it or ask the
-  user to lock the phone.
+- **Unlocking the physical phone pauses the session** ("iPhone in Use"). Do not
+  tap through the resume screen — stop and ask the user to lock/connect the
+  phone (see "Connection is the user's job").
 - **`type_text` needs an iOS text field focused first** — tap the field, wait
   for the keyboard, then type.
 - **Home-Screen labels are not tap targets.** `tap_text("Weather")` hits the

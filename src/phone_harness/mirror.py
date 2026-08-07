@@ -46,36 +46,36 @@ def is_frontmost():
 
 
 def activate():
+    """Bring iPhone Mirroring frontmost. Does NOT launch it — opening the app
+    and connecting the phone is the user's job, not the agent's."""
     app = running_app()
     if app is None:
-        subprocess.run(["open", "-a", APP_NAME], check=True)
-        deadline = time.time() + 15
-        while app is None and time.time() < deadline:
-            time.sleep(0.5)
-            app = running_app()
-        if app is None:
-            raise RuntimeError(f"{APP_NAME} did not launch")
+        raise RuntimeError(
+            f"{APP_NAME} isn't running — open it and connect your phone.")
     if not is_frontmost():
         app.activateWithOptions_(1 << 1)  # NSApplicationActivateIgnoringOtherApps
         time.sleep(0.5)
 
 
-def ensure_window(timeout=15.0):
-    """Launch + focus the mirroring app if needed; return window bounds.
+def ensure_window(timeout=5.0):
+    """Return the mirroring window bounds. Does not launch or connect anything —
+    if the app isn't running or has no phone window, raises so the user can
+    connect it themselves.
 
     The window exists even while the session shows a paused/connect
-    interstitial — detecting those is the caller's job (OCR the capture).
+    interstitial — detecting those is connection_state()'s job.
     """
     win = find_window()
     if win is None:
-        activate()
+        activate()  # frontmost if running; raises if not running
         deadline = time.time() + timeout
         while win is None and time.time() < deadline:
             time.sleep(0.5)
             win = find_window()
         if win is None:
             raise RuntimeError(
-                f"{APP_NAME} has no window — is the phone paired and in range?")
+                f"{APP_NAME} has no phone window — connect your phone in the "
+                "app, then retry.")
     return win
 
 

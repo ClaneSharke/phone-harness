@@ -21,11 +21,53 @@ AGENT_WORKSPACE = Path(
 
 # --- session / state ---
 
+# Distinctive text on the not-connected interstitials. Reconnecting past any of
+# these is a PHYSICAL action only the user can do (open the app, and if it says
+# "iPhone in Use", LOCK the phone). The agent must never tap through them.
+_BLOCKED_MARKERS = ("iphone in use", "lock your iphone", "mirroring ended",
+                    "to connect")
+
+
+def connection_state():
+    """'ready' | 'blocked' | 'no-window' | 'not-running'.
+
+    'blocked' means a connect / 'iPhone in Use' / paused interstitial is on
+    screen. Cheap to call; use it to decide whether to proceed."""
+    if mirror.running_app() is None:
+        return "not-running"
+    if mirror.find_window() is None:
+        return "no-window"
+    path, win = mirror.capture()  # window exists, so this won't launch anything
+    texts = " ".join(o["text"] for o in _ocr.recognize(path, win)).lower()
+    return "blocked" if any(m in texts for m in _BLOCKED_MARKERS) else "ready"
+
+
 def ensure_mirroring():
-    """Launch + focus iPhone Mirroring; return window bounds {x, y, w, h, id}."""
-    win = mirror.ensure_window()
-    mirror.activate()
-    return win
+    """Return the mirroring window if the phone is connected and ready.
+
+    Never launches the app, taps Connect/Continue, or polls to reconnect —
+    resuming mirroring is physical and only the user can do it. If the session
+    isn't ready, raises with instructions for the user. STOP and relay that
+    message; do not try to tap through the connect screen yourself.
+    """
+    state = connection_state()
+    if state == "ready":
+        mirror.activate()
+        return mirror.find_window()
+    if state == "not-running":
+        raise RuntimeError(
+            "iPhone Mirroring isn't running. Please open the iPhone Mirroring "
+            "app and connect your phone, then retry — reconnecting is physical, "
+            "so I can't do it for you.")
+    if state == "no-window":
+        raise RuntimeError(
+            "iPhone Mirroring is open but no phone is connected. Please connect "
+            "your phone in the app, then retry.")
+    raise RuntimeError(
+        "iPhone Mirroring is not connected — it's showing a connect / 'iPhone "
+        "in Use' screen. This needs you: open iPhone Mirroring and connect the "
+        "phone, and if it says 'iPhone in Use', LOCK your iPhone so mirroring "
+        "can resume. Then retry. I will not tap Connect for you.")
 
 
 def screen_info():
