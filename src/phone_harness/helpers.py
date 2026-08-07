@@ -87,7 +87,11 @@ def swipe(direction, distance=0.4):
     dy = {"up": -1, "down": 1}.get(direction, 0) * w["h"] * distance
     if not dx and not dy:
         raise ValueError(f"unknown direction {direction!r}")
-    mirror.drag(cx - dx / 2, cy - dy / 2, cx + dx / 2, cy + dy / 2)
+    # Fast, short drag = a momentum flick. A slow drag barely registers on iOS
+    # (it won't even flip a Home-Screen page); the flick is what snaps pages
+    # and carousels. For scrolling lists use scroll()/scroll_collect() instead.
+    mirror.drag(cx - dx / 2, cy - dy / 2, cx + dx / 2, cy + dy / 2,
+                duration=0.12, steps=6)
 
 
 def scroll(amount=300):
