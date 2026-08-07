@@ -189,18 +189,47 @@ def press(combo):
         time.sleep(0.03)
 
 
-def type_text(text):
-    """Type arbitrary unicode into the focused iOS field. \n presses return."""
+# iPhone Mirroring forwards raw HID keycodes to iOS and ignores the unicode
+# payload CGEventKeyboardSetUnicodeString attaches, so typing must go through
+# real keycodes (US layout).
+_SHIFTED = {
+    "A": "a", "B": "b", "C": "c", "D": "d", "E": "e", "F": "f", "G": "g",
+    "H": "h", "I": "i", "J": "j", "K": "k", "L": "l", "M": "m", "N": "n",
+    "O": "o", "P": "p", "Q": "q", "R": "r", "S": "s", "T": "t", "U": "u",
+    "V": "v", "W": "w", "X": "x", "Y": "y", "Z": "z",
+    "!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7",
+    "*": "8", "(": "9", ")": "0", "_": "-", "+": "=", ":": ";", '"': "'",
+    "<": ",", ">": ".", "?": "/", "~": "`", "{": "[", "}": "]", "|": "\\",
+}
+_PUNCT_KEYCODES = {
+    ".": 47, ",": 43, "/": 44, ";": 41, "'": 39, "[": 33, "]": 30,
+    "\\": 42, "-": 27, "=": 24, "`": 50, " ": 49,
+}
+
+
+def _keycode_for(ch):
+    """(keycode, needs_shift) for a character, or (None, False) if untypable."""
+    shifted = ch in _SHIFTED
+    base = _SHIFTED.get(ch, ch)
+    code = _KEYCODES.get(base, _PUNCT_KEYCODES.get(base))
+    return code, shifted
+
+
+def type_text(text, delay=0.03):
+    """Type text into the focused iOS field via real keycodes (US layout).
+    \n presses return. Raises on characters with no keycode (emoji etc.)."""
     _focus()
     for i, line in enumerate(text.split("\n")):
         if i:
             press("return")
-        for j in range(0, len(line), 20):
-            chunk = line[j:j + 20]
-            units = len(chunk.encode("utf-16-le")) // 2
+        for ch in line:
+            code, shifted = _keycode_for(ch)
+            if code is None:
+                raise ValueError(f"cannot type {ch!r} via keycodes")
             for down in (True, False):
-                ev = Quartz.CGEventCreateKeyboardEvent(None, 0, down)
-                Quartz.CGEventKeyboardSetUnicodeString(ev, units, chunk)
+                ev = Quartz.CGEventCreateKeyboardEvent(None, code, down)
+                if shifted:
+                    Quartz.CGEventSetFlags(ev, Quartz.kCGEventFlagMaskShift)
                 Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
                 time.sleep(0.01)
-            time.sleep(0.03)
+            time.sleep(delay)
