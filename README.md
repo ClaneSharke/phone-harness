@@ -137,3 +137,8 @@ PY
   key chords are not a thing over adb; a PIN-locked phone needs the user.
 - Both: no multi-touch (no pinch), no camera/Face ID flows, DRM video renders
   black. Connecting the phone is always the user's job.
+
+## Sponsor
+
+phone-harness is free and maintained in my own time.
+[Sponsoring](https://github.com/sponsors/ShawnPana) keeps it that way.
