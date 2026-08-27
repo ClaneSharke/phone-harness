@@ -259,15 +259,69 @@ def _win():
     return send("screen.require")
 
 
-def swipe(direction, distance=0.4):
-    """swipe('up'|'down'|'left'|'right') — a touch-drag centered on screen.
-    Direction is finger motion: swipe('up') moves content up (scrolls down)."""
+# Directions name WHAT YOU WANT TO SEE, not which way a finger moves. Finger
+# metaphors invert with the Mac's natural-scroll setting and with whoever is
+# describing them; "show me what is further down the list" does not.
+#
+#   down  -> reveal content further down     up    -> reveal content above
+#   right -> reveal content further right    left  -> reveal content to the left
+#
+# Verified independent of com.apple.swipescrolldirection: the same deltas move
+# the phone the same way whether natural scrolling is on or off.
+# The tuple is the (dx, dy) SIGN sent to input.scroll to achieve that reveal.
+# A negative dy reveals content further down: the same convention the old
+# {"up": -1} table used, just named after the result instead of the finger.
+_DIRECTIONS = {"down": (0, -1), "up": (0, 1), "right": (-1, 0), "left": (1, 0)}
+
+
+def _point(at, win):
+    """Where the gesture is aimed. Defaults to the window centre.
+
+    The centre is fine for a full-screen list and wrong for everything else: a
+    horizontal strip, a carousel, an inner scroll view, a sheet over a page.
+    Aiming at the centre of Weather hits the temperature readout, which does
+    not scroll, while the hourly strip below it does.
+
+    `at` may be (x, y) in screen points, or any box from ocr()/find_text()/
+    find_nodes() — so `scroll("right", at=find_text("Now")[0])` reads the way
+    you would say it.
+    """
+    if at is None:
+        return win["x"] + win["w"] / 2, win["y"] + win["h"] / 2
+    if isinstance(at, dict):
+        return at["x"], at["y"]
+    x, y = at
+    return x, y
+
+
+def _delta(direction, amount, win):
+    try:
+        sx, sy = _DIRECTIONS[direction]
+    except KeyError:
+        raise ValueError(
+            f"direction must be one of {sorted(_DIRECTIONS)}, got {direction!r}"
+        ) from None
+    return int(sx * win["w"] * amount), int(sy * win["h"] * amount)
+
+
+def swipe(direction, distance=0.4, at=None):
+    """swipe('up'|'down'|'left'|'right') — a momentum touch-drag, centred.
+
+    `direction` is what you want to SEE, matching scroll(): swipe('down')
+    reveals content further down, swipe('right') what is off to the right.
+    This used to mean finger motion, which is the opposite; the two verbs
+    disagreeing on the same word was a trap worth removing.
+    """
     w = _win()
-    cx, cy = w["x"] + w["w"] / 2, w["y"] + w["h"] / 2
-    dx = {"left": -1, "right": 1}.get(direction, 0) * w["w"] * distance
-    dy = {"up": -1, "down": 1}.get(direction, 0) * w["h"] * distance
+    cx, cy = _point(at, w)
+    sx, sy = _DIRECTIONS.get(direction, (0, 0))
+    # The finger travels the same way as the scroll delta: to bring content
+    # from further down into view, the finger moves up the screen.
+    dx = sx * w["w"] * distance
+    dy = sy * w["h"] * distance
     if not dx and not dy:
-        raise ValueError(f"unknown direction {direction!r}")
+        raise ValueError(
+            f"direction must be one of {sorted(_DIRECTIONS)}, got {direction!r}")
     # Fast, short drag = a momentum flick. A slow drag barely registers on iOS
     # (it won't even flip a Home-Screen page); the flick is what snaps pages
     # and carousels. For scrolling lists use scroll()/scroll_collect() instead.
@@ -275,12 +329,22 @@ def swipe(direction, distance=0.4):
          duration=0.12, steps=6)
 
 
-def scroll(amount=300):
-    """Scroll at screen center. Positive scrolls content down the way a
-    trackpad two-finger-up does; use swipe() when momentum matters."""
+def scroll(direction="down", amount=0.3, at=None):
+    """Scroll the screen. `direction` is what you want to SEE:
+    'down' reveals content further down the list, 'right' what is off to the
+    right. `amount` is a fraction of the screen.
+
+    `at` aims the gesture — (x, y) or a box from ocr()/find_text(). Only the
+    scroll view under that point moves, so pass it whenever the thing you want
+    to scroll is not the full-screen list: a horizontal strip, a carousel, an
+    inner list. Defaults to the window centre.
+
+    Use swipe() when momentum matters.
+    """
     w = _win()
-    send("input.scroll", x=w["x"] + w["w"] / 2, y=w["y"] + w["h"] / 2,
-         dy=-amount)
+    dx, dy = _delta(direction, amount, w)
+    px, py = _point(at, w)
+    send("input.scroll", x=px, y=py, dx=dx, dy=dy)
 
 
 # --- scrolling through lists ------------------------------------------------
@@ -318,7 +382,8 @@ def _profile():
     return motion.profile(screenshot())
 
 
-def scroll_screen(direction="up", amount=0.6, settle=2.5, moved_thresh=None):
+def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
+                  at=None):
     """One scroll gesture, then wait for the screen to settle (so a lazy-load
     spinner resolves before we judge movement).
 
@@ -339,15 +404,13 @@ def scroll_screen(direction="up", amount=0.6, settle=2.5, moved_thresh=None):
     """
     w = _win()
     from . import motion
-    sign = {"up": -1, "down": 1}.get(direction)  # 'up' reveals content below
-    if sign is None:
-        raise ValueError(f"direction must be 'up' or 'down', got {direction!r}")
+    dx, dy = _delta(direction, amount, w)
+    px, py = _point(at, w)
 
     before_prof = _profile()
     before = _text_set(_content_texts())
 
-    send("input.scroll", x=w["x"] + w["w"] / 2, y=w["y"] + w["h"] / 2,
-         dy=sign * int(w["h"] * amount), steps=10)
+    send("input.scroll", x=px, y=py, dx=dx, dy=dy, steps=10)
     time.sleep(0.4)
 
     # Settle on pixels: two consecutive frames that neither move nor change.
@@ -374,7 +437,8 @@ def scroll_screen(direction="up", amount=0.6, settle=2.5, moved_thresh=None):
             "before": before, "after": after, "boxes": boxes}
 
 
-def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
+def scroll_until(done, direction="down", amount=0.6, max_scrolls=60,
+                 settle=2.5, at=None):
     """Scroll until `done(boxes)` is truthy or the list stops moving.
 
     `done` receives the current content and returns a truthy value to stop;
@@ -386,7 +450,7 @@ def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
         return hit
     stale = 0
     for _ in range(max_scrolls):
-        res = scroll_screen(direction, amount, settle)
+        res = scroll_screen(direction, amount, settle, at=at)
         if res["navigated"]:
             raise RuntimeError(
                 "the scroll gesture opened something instead of scrolling — "
@@ -406,8 +470,9 @@ def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
     return None
 
 
-def scroll_collect(extract=None, key=None, direction="up", amount=0.6,
-                   max_scrolls=400, end_after=3, settle=2.5, on_progress=None):
+def scroll_collect(extract=None, key=None, direction="down", amount=0.6,
+                   max_scrolls=400, end_after=3, settle=2.5, on_progress=None,
+                   at=None):
     """Scroll a list top-to-bottom, extracting and de-duping items each screen,
     until the list reaches its true end.
 
@@ -440,7 +505,7 @@ def scroll_collect(extract=None, key=None, direction="up", amount=0.6,
     ingest(_content_texts())
     stale = 0
     for i in range(1, max_scrolls + 1):
-        res = scroll_screen(direction, amount, settle)
+        res = scroll_screen(direction, amount, settle, at=at)
         if res["navigated"]:
             return {"items": order, "stop": "navigated-away", "scrolls": i}
         new = ingest(res["boxes"])

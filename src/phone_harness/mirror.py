@@ -372,14 +372,20 @@ def drag(x1, y1, x2, y2, duration=0.35, steps=14):
     _post_mouse(Quartz.kCGEventLeftMouseUp, x2, y2)
 
 
-def scroll_wheel(dy, x, y, steps=6):
-    """Scroll-gesture at (x, y). Positive dy scrolls content up (finger down)."""
+def scroll_wheel(dy, x, y, steps=6, dx=0):
+    """Scroll-gesture at (x, y), vertical and/or horizontal.
+
+    dy > 0 reveals content further down; dx > 0 reveals content further right.
+    Verified independent of the Mac's natural-scroll setting: the same deltas
+    move the phone the same way with swipescrolldirection 0 and 1.
+    """
     _focus()
     _post_mouse(Quartz.kCGEventMouseMoved, x, y)
     time.sleep(0.1)
     for _ in range(steps):
         ev = Quartz.CGEventCreateScrollWheelEvent(
-            None, Quartz.kCGScrollEventUnitPixel, 1, int(dy / steps))
+            None, Quartz.kCGScrollEventUnitPixel, 2,
+            int(dy / steps), int(dx / steps))
         Quartz.CGEventSetLocation(ev, Quartz.CGPointMake(x, y))
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
         time.sleep(0.03)

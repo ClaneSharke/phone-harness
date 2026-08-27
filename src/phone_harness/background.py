@@ -212,7 +212,7 @@ def drag(x1, y1, x2, y2, duration=0.35, steps=14):
     _emit(_LMOUSE_UP, x2, y2, pid, win)
 
 
-def scroll_wheel(dy, x, y, steps=6):
+def scroll_wheel(dy, x, y, steps=6, dx=0):
     """Scroll by borrowing the mouse pointer, not the focus.
 
     macOS routes a scroll event to the window under the REAL cursor, not to the
@@ -252,7 +252,8 @@ def scroll_wheel(dy, x, y, steps=6):
     try:
         for _ in range(steps):
             ev = Quartz.CGEventCreateScrollWheelEvent(
-                None, Quartz.kCGScrollEventUnitPixel, 1, int(dy / steps))
+                None, Quartz.kCGScrollEventUnitPixel, 2,
+                int(dy / steps), int(dx / steps))
             Quartz.CGEventSetLocation(ev, Quartz.CGPointMake(x, y))
             Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
             time.sleep(0.03)
