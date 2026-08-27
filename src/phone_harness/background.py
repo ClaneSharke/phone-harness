@@ -242,6 +242,13 @@ def scroll_wheel(dy, x, y, steps=6):
     home = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
     Quartz.CGWarpMouseCursorPosition(Quartz.CGPointMake(x, y))
     time.sleep(0.05)
+    # The warp moves the pointer but does NOT re-run the hit-test that decides
+    # which window a scroll belongs to. Without this event the scroll is
+    # delivered to whatever was under the cursor before, and nothing moves.
+    mv = Quartz.CGEventCreateMouseEvent(
+        None, Quartz.kCGEventMouseMoved, Quartz.CGPointMake(x, y), 0)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, mv)
+    time.sleep(0.05)
     try:
         for _ in range(steps):
             ev = Quartz.CGEventCreateScrollWheelEvent(

@@ -312,38 +312,66 @@ def _overlap(a, b):
     return len(a & b) / len(a | b)
 
 
-def scroll_screen(direction="up", amount=0.6, settle=2.5, moved_thresh=0.6):
+def _profile():
+    """Row-brightness profile of the current screen, for motion measurement."""
+    from . import motion
+    return motion.profile(screenshot())
+
+
+def scroll_screen(direction="up", amount=0.6, settle=2.5, moved_thresh=None):
     """One scroll gesture, then wait for the screen to settle (so a lazy-load
     spinner resolves before we judge movement).
 
-    Returns {moved, overlap, before, after, boxes} — `boxes` is the settled
-    content, ready to parse. `moved` is False when overlap >= moved_thresh:
-    the list didn't advance. The default 0.6 sits in the empirical gap between
-    real forward progress (overlap < ~0.45) and overscroll bounce at a
-    boundary (overlap > ~0.7), which springs the content and would otherwise
-    read as movement and defeat end-detection.
+    Returns {moved, navigated, dy, match, overlap, before, after, boxes}.
+
+    `moved` is decided by PIXELS, not by shared OCR text. Text overlap cannot
+    tell a scroll from a navigation (both collapse it), says nothing at all on
+    a screen with no text, and is unstable enough frame to frame that real
+    scrolls were routinely reported as no movement. `dy` is how far the content
+    actually travelled and `match` is how well a translation explains the
+    change; see motion.py.
+
+    `navigated` is True when the screen was REPLACED rather than scrolled — the
+    gesture opened something. Callers looping over a list should stop and say
+    so rather than keep scrolling against the wrong screen.
+
+    `moved_thresh` is accepted and ignored; it tuned the old text-overlap test.
     """
     w = _win()
+    from . import motion
     sign = {"up": -1, "down": 1}.get(direction)  # 'up' reveals content below
     if sign is None:
         raise ValueError(f"direction must be 'up' or 'down', got {direction!r}")
+
+    before_prof = _profile()
     before = _text_set(_content_texts())
+
     send("input.scroll", x=w["x"] + w["w"] / 2, y=w["y"] + w["h"] / 2,
          dy=sign * int(w["h"] * amount), steps=10)
     time.sleep(0.4)
-    prev_boxes, prev = None, None
-    deadline = time.time() + settle
+
+    # Settle on pixels: two consecutive frames that neither move nor change.
+    prev, deadline = None, time.time() + settle
     while time.time() < deadline:
-        boxes = _content_texts()
-        cur = _text_set(boxes)
-        if cur == prev:                 # two identical reads = settled
-            break
-        prev, prev_boxes = cur, boxes
-        time.sleep(0.35)
-    after = prev or frozenset()
-    return {"moved": _overlap(before, after) < moved_thresh,
+        cur = _profile()
+        if prev is not None:
+            m = motion.compare(prev, cur)
+            if abs(m["dy"]) < motion.STILL_PX and m["match"] > 0.99:
+                prev = cur
+                break
+        prev = cur
+        time.sleep(0.25)
+    after_prof = prev if prev is not None else before_prof
+
+    m = motion.compare(before_prof, after_prof)
+    v = motion.verdict(m)
+
+    boxes = _content_texts()
+    after = _text_set(boxes)
+    return {"moved": v == "scrolled", "navigated": v == "replaced",
+            "dy": m["dy"], "match": m["match"],
             "overlap": round(_overlap(before, after), 3),
-            "before": before, "after": after, "boxes": prev_boxes or []}
+            "before": before, "after": after, "boxes": boxes}
 
 
 def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
@@ -359,6 +387,11 @@ def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
     stale = 0
     for _ in range(max_scrolls):
         res = scroll_screen(direction, amount, settle)
+        if res["navigated"]:
+            raise RuntimeError(
+                "the scroll gesture opened something instead of scrolling — "
+                "the screen was replaced, not moved. Stopping rather than "
+                "looping against the wrong screen.")
         hit = done(res["boxes"])
         if hit:
             return hit
@@ -384,7 +417,8 @@ def scroll_collect(extract=None, key=None, direction="up", amount=0.6,
     - Stops after `end_after` consecutive non-moving scrolls (the settle window
       already gave lazy-load a chance), or `max_scrolls`.
 
-    Returns {items, stop, scrolls}. `stop` is 'reached-end' or 'max-scrolls'.
+    Returns {items, stop, scrolls}. `stop` is 'reached-end', 'max-scrolls',
+    or 'navigated-away' when a gesture opened something instead of scrolling.
     Use amount < 1.0 so screens overlap and no row falls between captures.
     """
     extract = extract or (lambda boxes: [o["text"].strip() for o in boxes
@@ -407,6 +441,8 @@ def scroll_collect(extract=None, key=None, direction="up", amount=0.6,
     stale = 0
     for i in range(1, max_scrolls + 1):
         res = scroll_screen(direction, amount, settle)
+        if res["navigated"]:
+            return {"items": order, "stop": "navigated-away", "scrolls": i}
         new = ingest(res["boxes"])
         if on_progress:
             on_progress(i, len(order), new, res["moved"], res["overlap"])
