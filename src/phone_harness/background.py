@@ -213,27 +213,45 @@ def drag(x1, y1, x2, y2, duration=0.35, steps=14):
 
 
 def scroll_wheel(dy, x, y, steps=6):
-    """Scroll with a fast momentum FLICK, not a wheel event.
+    """Scroll by borrowing the mouse pointer, not the focus.
 
-    iPhone Mirroring scrolls by translating Mac scroll-wheel events, but those
-    only reach the app when it is active — so in the background they do nothing
-    (verified: 0% movement). A slow touch-drag also barely moves an iOS list.
-    A *fast* flick does: it hands the scroll view enough release velocity to
-    carry the list (verified ~29% frame change per flick, new rows each time).
+    macOS routes a scroll event to the window under the REAL cursor, not to the
+    active application and not to the event's own location field. That single
+    fact explains everything that failed here:
 
-    Sign matches the wheel path it replaces: dy < 0 flicks the finger up so
-    content scrolls up and reveals what's below (scroll_screen's "up")."""
-    pid, win = _ctx()
-    if dy < 0:                                   # reveal content below
-        y0, y1 = win["y"] + win["h"] * 0.72, win["y"] + win["h"] * 0.28
-    else:                                        # reveal content above
-        y0, y1 = win["y"] + win["h"] * 0.28, win["y"] + win["h"] * 0.72
-    _emit(_LMOUSE_DOWN, x, y0, pid, win)
-    for i in range(1, steps + 1):
-        t = i / steps
-        _emit(_LMOUSE_DRAGGED, x, y0 + (y1 - y0) * t, pid, win)
-        time.sleep(0.006)                        # fast — velocity is what carries it
-    _emit(_LMOUSE_UP, x, y1, pid, win)
+      - the old flick (down 0.72h, drag, up 0.28h) never scrolled at all: iOS
+        read it as a TAP at the touch-down point and opened whatever row sat
+        there. Silent, and destructive on a Home Screen or a chat list.
+      - a wheel event posted with CGEventPostToPid does nothing, with or
+        without the continuous/scroll-phase fields a real trackpad sets:
+        posting to a pid bypasses the hit-testing that routes scrolls.
+      - a SkyLight scroll record (CGSEventType 22) over the channel the mouse
+        events use: nothing at any delta offset tried.
+      - arrow keys, space and cmd+down over the working background key path:
+        nothing; iOS lists don't scroll from those.
+      - posting to the HID tap with only CGEventSetLocation set: nothing,
+        because the cursor was elsewhere on screen.
+
+    So put the cursor over the window for the length of the gesture and put it
+    straight back. Mirroring does NOT need to be frontmost — verified scrolling
+    with Finder active throughout. Warping costs the user their pointer for
+    ~0.3s, which is a great deal cheaper than an activation, and immeasurably
+    cheaper than opening a random row in whatever app is on screen.
+    """
+    _ctx()                       # window must exist; raises with a clear message
+    home = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+    Quartz.CGWarpMouseCursorPosition(Quartz.CGPointMake(x, y))
+    time.sleep(0.05)
+    try:
+        for _ in range(steps):
+            ev = Quartz.CGEventCreateScrollWheelEvent(
+                None, Quartz.kCGScrollEventUnitPixel, 1, int(dy / steps))
+            Quartz.CGEventSetLocation(ev, Quartz.CGPointMake(x, y))
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+            time.sleep(0.03)
+        time.sleep(0.15)         # let the pan land before the pointer leaves
+    finally:
+        Quartz.CGWarpMouseCursorPosition(home)
 
 
 # --- keyboard (background), via make-key + CGEventPostToPid ---
