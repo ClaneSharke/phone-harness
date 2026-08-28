@@ -239,6 +239,19 @@ def scroll_wheel(dy, x, y, steps=6, dx=0):
     cheaper than opening a random row in whatever app is on screen.
     """
     _ctx()                       # window must exist; raises with a clear message
+
+    # A scroll goes to whatever window is under the cursor, so the phone window
+    # has to be the one on top at that point. It is not enough to move the
+    # pointer: with Chrome overlapping the mirroring window, the gesture was
+    # delivered to Chrome and silently scrolled the user's browser instead of
+    # the phone. Raise the window first, then give focus back.
+    from AppKit import NSWorkspace
+    prev = NSWorkspace.sharedWorkspace().frontmostApplication()
+    try:
+        mirror.activate()
+    except RuntimeError:
+        pass                     # not frontmost-able; the warp below may still win
+
     home = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
     Quartz.CGWarpMouseCursorPosition(Quartz.CGPointMake(x, y))
     time.sleep(0.05)
@@ -260,6 +273,9 @@ def scroll_wheel(dy, x, y, steps=6, dx=0):
         time.sleep(0.15)         # let the pan land before the pointer leaves
     finally:
         Quartz.CGWarpMouseCursorPosition(home)
+        if prev is not None and prev.bundleIdentifier() != (
+                mirror.running_app() and mirror.running_app().bundleIdentifier()):
+            prev.activateWithOptions_(1 << 1)   # NSApplicationActivateIgnoringOtherApps
 
 
 # --- keyboard (background), via make-key + CGEventPostToPid ---

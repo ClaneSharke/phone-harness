@@ -387,18 +387,21 @@ def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
     """One scroll gesture, then wait for the screen to settle (so a lazy-load
     spinner resolves before we judge movement).
 
-    Returns {moved, navigated, dy, match, overlap, before, after, boxes}.
+    Returns raw observations. No judgement, no thresholds:
 
-    `moved` is decided by PIXELS, not by shared OCR text. Text overlap cannot
-    tell a scroll from a navigation (both collapse it), says nothing at all on
-    a screen with no text, and is unstable enough frame to frame that real
-    scrolls were routinely reported as no movement. `dy` is how far the content
-    actually travelled and `match` is how well a translation explains the
-    change; see motion.py.
+      dy       pixels the content translated (motion.py), signed
+      match    how well a translation of dy explains the change, -1..1
+      overlap  Jaccard overlap of the OCR text before and after
+      before / after / boxes   the text, and the settled content to parse
 
-    `navigated` is True when the screen was REPLACED rather than scrolled — the
-    gesture opened something. Callers looping over a list should stop and say
-    so rather than keep scrolling against the wrong screen.
+    Whether the scroll "worked" is yours to decide, because only you know what
+    you were after: a list wants translation, a feed wants a different video,
+    an hourly strip wants later hours. Every cutoff this function could apply
+    would be right for one of those and wrong for the others -- measured, three
+    separate times, on this phone. So it reports and you judge.
+
+    If you want the old rule of thumb, `motion.verdict()` turns dy and match
+    into scrolled/still/replaced. Nothing here calls it for you.
 
     `moved_thresh` is accepted and ignored; it tuned the old text-overlap test.
     """
@@ -413,36 +416,36 @@ def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
     send("input.scroll", x=px, y=py, dx=dx, dy=dy, steps=10)
     time.sleep(0.4)
 
-    # Settle on pixels: two consecutive frames that neither move nor change.
-    prev, deadline = None, time.time() + settle
+    # Settle: wait until two reads of the content are IDENTICAL, or the
+    # caller's window runs out. Exact equality, so there is nothing to tune --
+    # a screen that never settles (a playing video) simply uses its budget.
+    boxes, prev_set, deadline = _content_texts(), None, time.time() + settle
     while time.time() < deadline:
-        cur = _profile()
-        if prev is not None:
-            m = motion.compare(prev, cur)
-            if abs(m["dy"]) < motion.STILL_PX and m["match"] > 0.99:
-                prev = cur
-                break
-        prev = cur
+        cur_set = _text_set(boxes)
+        if cur_set == prev_set:
+            break
+        prev_set = cur_set
         time.sleep(0.25)
-    after_prof = prev if prev is not None else before_prof
+        boxes = _content_texts()
 
-    m = motion.compare(before_prof, after_prof)
-    v = motion.verdict(m)
-
-    boxes = _content_texts()
+    m = motion.compare(before_prof, _profile())
     after = _text_set(boxes)
-    return {"moved": v == "scrolled", "navigated": v == "replaced",
-            "dy": m["dy"], "match": m["match"],
+    return {"dy": m["dy"], "match": m["match"],
             "overlap": round(_overlap(before, after), 3),
             "before": before, "after": after, "boxes": boxes}
 
 
 def scroll_until(done, direction="down", amount=0.6, max_scrolls=60,
                  settle=2.5, at=None):
-    """Scroll until `done(boxes)` is truthy or the list stops moving.
+    """Scroll until `done(boxes)` is truthy, or the screen stops changing.
 
     `done` receives the current content and returns a truthy value to stop;
     that value is returned. Returns None if the end is reached first.
+
+    YOUR predicate decides success. The stop condition is only ever "the screen
+    stopped changing" — never a guess about whether a scroll counts as a scroll,
+    because that depends on the app: a list translates, a feed swaps to the next
+    item, and both are progress.
     """
     boxes = _content_texts()
     hit = done(boxes)
@@ -451,19 +454,14 @@ def scroll_until(done, direction="down", amount=0.6, max_scrolls=60,
     stale = 0
     for _ in range(max_scrolls):
         res = scroll_screen(direction, amount, settle, at=at)
-        if res["navigated"]:
-            raise RuntimeError(
-                "the scroll gesture opened something instead of scrolling — "
-                "the screen was replaced, not moved. Stopping rather than "
-                "looping against the wrong screen.")
         hit = done(res["boxes"])
         if hit:
             return hit
-        if res["moved"]:
+        if res["after"] != res["before"]:
             stale = 0
         else:
             stale += 1
-            if stale >= 2:              # confirmed still after a retry
+            if stale >= 2:      # the content came back byte-identical twice
                 return None
             time.sleep(0.8)
             activate()
@@ -479,11 +477,16 @@ def scroll_collect(extract=None, key=None, direction="down", amount=0.6,
     - extract(boxes) -> list of items for the current screen. Default returns
       each content text line, so a bare scroll_collect() gathers all text.
     - key(item) -> hashable de-dup key (default: the item itself).
-    - Stops after `end_after` consecutive non-moving scrolls (the settle window
-      already gave lazy-load a chance), or `max_scrolls`.
+    - Stops after `end_after` consecutive scrolls that yield NO NEW ITEMS (the
+      settle window already gave lazy-load a chance), or `max_scrolls`.
 
-    Returns {items, stop, scrolls}. `stop` is 'reached-end', 'max-scrolls',
-    or 'navigated-away' when a gesture opened something instead of scrolling.
+    The end condition is your extractor running dry, not a pixel judgement
+    about whether a scroll counts as a scroll. That works on a list, which
+    translates, and on a feed, which swaps to the next item -- both are
+    progress, and only your extractor knows whether progress produced anything
+    you wanted.
+
+    Returns {items, stop, scrolls}. `stop` is 'reached-end' or 'max-scrolls'.
     Use amount < 1.0 so screens overlap and no row falls between captures.
     """
     extract = extract or (lambda boxes: [o["text"].strip() for o in boxes
@@ -506,12 +509,10 @@ def scroll_collect(extract=None, key=None, direction="down", amount=0.6,
     stale = 0
     for i in range(1, max_scrolls + 1):
         res = scroll_screen(direction, amount, settle, at=at)
-        if res["navigated"]:
-            return {"items": order, "stop": "navigated-away", "scrolls": i}
         new = ingest(res["boxes"])
         if on_progress:
-            on_progress(i, len(order), new, res["moved"], res["overlap"])
-        if res["moved"]:
+            on_progress(i, len(order), new, res["dy"], res["overlap"])
+        if new:
             stale = 0
         else:
             stale += 1
