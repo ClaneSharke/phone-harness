@@ -31,10 +31,14 @@ PY
 - Invoke as `phone-harness`. Use heredocs for multi-line commands.
 - Helpers are pre-imported. All coordinates are global screen points.
 - `ensure_mirroring()` launches the window and gates on connection. The
-  default build then works the phone **without focusing it**: capture is by
-  window id and input is an event record delivered straight to the app, so a
-  task never steals the user's screen. `PHONE_HARNESS_BACKGROUND=0` forces the
-  classic path, which must focus before every action.
+  default build works the phone **without taking the user's focus**: capture is
+  by window id and taps and keystrokes are event records delivered straight to
+  the app. Scrolling is the exception — macOS routes a scroll to whichever
+  window sits under the pointer, so a scroll raises the mirroring window for
+  the length of the gesture and hands focus straight back. Expect a brief
+  flicker on scrolls and nothing on anything else.
+  `PHONE_HARNESS_BACKGROUND=0` forces the classic path, which focuses before
+  every action.
 
 ## Screen Workflow
 
@@ -49,27 +53,58 @@ PY
   `tap()` expects global macOS screen points. If using `tap()` instead, first
   convert with `image_point()` using the current `screen_info()`; never estimate
   the window offset manually.
-- **Verify after every action**: `wait_stable()` then `ocr()`/`screenshot()`.
-  There is no DOM to assert against; the capture is the ground truth.
+- **Work in a loop: act, verify, adapt.** There is no DOM to assert against
+  and no return value that means "it worked", so the loop is the method:
+
+  1. **Name what should change** before you act — a title, a row, a username,
+     a field's contents. If you cannot name it, you cannot tell success from a
+     no-op, and most phone failures are silent no-ops.
+  2. **Do one action**, then check that one thing (`wait_stable()`, then
+     `ocr()` / `screenshot()` / your own predicate).
+  3. **Once a sequence is proven, batch it** — a whole sub-task in one
+     invocation is much faster than a call per turn. Batch what you have
+     already watched work, and keep one cheap check at the end.
+  4. **When a check fails, isolate.** Re-run that single action on its own,
+     look at the screen, form one guess about why, test the guess, and adapt.
+     Do not re-run the whole batch hoping it lands.
+  5. **Keep what you learn**: put reusable checks and fixed-up steps in
+     `agent-workspace/agent_helpers.py` so the next task starts ahead.
+
+- **The harness reports, you decide.** Helpers return observations —
+  coordinates, text, pixel deltas — never a verdict on whether your intent was
+  achieved. Only you know what you were after, so judge from the content you
+  expected, not from a number looking big or small.
 - Navigation: `home()`, `app_switcher()`, `open_app("Notes")` (Spotlight),
-  `swipe("up")`, `scroll()`, `type_text("...")`, `press("return")`,
+  `scroll("down")`, `swipe("down")`, `type_text("...")`, `press("return")`,
   `long_press(x, y)`.
-- **Scrolling a list**: use `scroll_collect(extract, key=...)` to walk a list
-  to its true end, de-duping as it goes — it returns `{items, stop, scrolls}`
-  where `stop` is `'reached-end'` or `'max-scrolls'`. Use `scroll_until(done)`
-  to stop when a predicate on the visible OCR is met. Both decide "done" from
-  whether the **screen actually moved**, not from whether your parser found
-  new rows — a dense screen or a missed OCR line will not end the scroll
-  early. Each step settles first so lazy-loaded content arrives before the
-  movement check. `scroll_screen()` is the single-step primitive if you need
-  it. In the background build these scroll with momentum flicks — wheel
-  events only route to a *focused* window, and a slow touch-drag barely moves
-  an iOS list before bouncing back; only a fast flick carries it.
+- **Directions name what you want to SEE, for every gesture that takes one**
+  (`scroll`, `swipe`, `scroll_screen`, `scroll_until`, `scroll_collect`):
+  `"down"` reveals content further down a list or the next item in a feed,
+  `"up"` goes back towards the start, and `"left"`/`"right"` work the same way
+  sideways.
+
+  **This is the opposite of what these words used to mean.** They used to name
+  finger motion, so the old `swipe("up")` — finger up — is today's
+  `swipe("down")`. Existing scripts saying `"up"` will now scroll backwards.
+- **Scrolling**: `scroll(direction, amount, at=...)` for one gesture;
+  `scroll_until(done)` to stop when your predicate on the visible OCR is met;
+  `scroll_collect(extract, key=...)` to walk a list, de-duping as it goes.
+  `scroll_until` stops on your predicate; `scroll_collect` stops when your
+  extractor stops finding new items and returns `{items, stop, scrolls}` with
+  `stop` of `'reached-end'` or `'max-scrolls'`. Both end on YOUR check, so an
+  extractor that misses rows will end the walk early — make it robust before
+  blaming the scroll.
+  `scroll_screen()` is the single-step primitive and returns raw observations
+  (`dy`, `match`, `overlap`, `before`, `after`, `boxes`); what counts as a
+  successful scroll is yours to decide, because it differs per app — a list
+  translates, a feed swaps to the next item, an inner strip moves while the
+  rest of the screen holds still.
+  `at` aims the gesture. Only the scroll view under that point moves, so pass
+  it whenever the thing you want to scroll is not the full-screen list.
 - Raw Quartz is the escape hatch: `import Quartz` in your script for anything
   the helpers don't cover — but raw CGEvents don't ride the helpers' delivery
-  path. They land only while the window is frontmost and are swallowed
-  silently otherwise, scroll-wheel events included: `activate()` first, then
-  verify the screen actually changed.
+  path, and where they land is its own question per event type. Check what
+  actually happened on screen rather than assuming the event arrived.
 
 ## Android
 
@@ -102,8 +137,10 @@ PY
   empty space "succeeds". After an action: `wait_for_app("com.android.chrome")`
   (~0.1s per poll) or `wait_for_text("Got it")` (returns the box or None),
   then `ui()`/`ocr()` once for contents. The tree costs ~2-3s a call on a slow
-  phone and a screenshot ~0.5s, so batch a whole sub-task in one invocation
-  and filter in Python rather than one call per turn.
+  phone and a screenshot ~0.5s, so batching a whole sub-task in one invocation
+  is worth a lot — but batch the steps you have already watched work, and keep
+  a check at the end. A batch of unverified steps fails silently and tells you
+  nothing about which one broke.
 - **The phone locks itself** after its screen timeout. `connection_state()`
   reports `locked`; taps and `ocr()` refuse with the same message. Ask the
   user to unlock — never type a PIN. `screenshot()` still works locked, so you
