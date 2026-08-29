@@ -252,6 +252,9 @@ def scroll_wheel(dy, x, y, steps=6, dx=0):
     except RuntimeError:
         pass                     # not frontmost-able; the warp below may still win
 
+    # Refuse rather than scroll whatever the user just brought forward.
+    mirror.require_window_at(x, y)
+
     home = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
     Quartz.CGWarpMouseCursorPosition(Quartz.CGPointMake(x, y))
     time.sleep(0.05)

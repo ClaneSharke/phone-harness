@@ -219,6 +219,47 @@ def frontmost_window():
     return None
 
 
+def window_owns_point(x, y):
+    """Is the mirroring window the topmost normal window at (x, y)?
+
+    A scroll is delivered to whatever window sits under the pointer, so this is
+    the difference between scrolling the phone and scrolling whatever the user
+    just brought forward. Measured the hard way: with Chrome raised over the
+    phone window, a gesture aimed at the phone scrolled Chrome instead, silently.
+    """
+    app = running_app()
+    if app is None:
+        return False
+    pid = app.processIdentifier()
+    wins = Quartz.CGWindowListCopyWindowInfo(
+        Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID) or []
+    for w in wins:
+        if w.get("kCGWindowLayer", 1) != 0:
+            continue
+        b = w.get("kCGWindowBounds", {})
+        if (b.get("X", 0) <= x <= b.get("X", 0) + b.get("Width", 0)
+                and b.get("Y", 0) <= y <= b.get("Y", 0) + b.get("Height", 0)):
+            return w.get("kCGWindowOwnerPID") == pid
+    return False
+
+
+def require_window_at(x, y):
+    """Raise the phone window if something covers the target point, and refuse
+    to fire if it still does. Never post a gesture into another app."""
+    if window_owns_point(x, y):
+        return
+    try:
+        activate()
+    except RuntimeError:
+        pass
+    time.sleep(0.15)
+    if not window_owns_point(x, y):
+        raise RuntimeError(
+            f"another window covers ({x:.0f}, {y:.0f}) — refusing to send the "
+            f"gesture there, it would land in that app instead of the phone. "
+            f"Move or minimise it, or bring iPhone Mirroring forward.")
+
+
 def is_frontmost():
     """Does iPhone Mirroring have both keyboard focus AND the frontmost window.
 
@@ -451,6 +492,7 @@ def scroll_wheel(dy, x, y, steps=6, dx=0):
     move the phone the same way with swipescrolldirection 0 and 1.
     """
     _focus()
+    require_window_at(x, y)
     _post_mouse(Quartz.kCGEventMouseMoved, x, y)
     time.sleep(0.1)
     for _ in range(steps):
