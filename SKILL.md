@@ -75,17 +75,29 @@ PY
   achieved. Only you know what you were after, so judge from the content you
   expected, not from a number looking big or small.
 - Navigation: `home()`, `app_switcher()`, `open_app("Notes")` (Spotlight),
-  `scroll("down")`, `swipe("down")`, `type_text("...")`, `press("return")`,
+  `scroll("down")`, `swipe("up")`, `type_text("...")`, `press("return")`,
   `long_press(x, y)`.
-- **Directions name what you want to SEE, for every gesture that takes one**
-  (`scroll`, `swipe`, `scroll_screen`, `scroll_until`, `scroll_collect`):
-  `"down"` reveals content further down a list or the next item in a feed,
-  `"up"` goes back towards the start, and `"left"`/`"right"` work the same way
-  sideways.
+- **Directions: `scroll` says what you want to SEE, `swipe` says which way the
+  finger goes.** They disagree on purpose, because English does — "scroll down
+  the page" and "swipe up for the next video" describe the same outcome.
 
-  **This is the opposite of what these words used to mean.** They used to name
-  finger motion, so the old `swipe("up")` — finger up — is today's
-  `swipe("down")`. Existing scripts saying `"up"` will now scroll backwards.
+  ```
+  scroll("down")   show me what is further down
+  swipe("up")      thumb up  (the phrasing everyone uses for "next")
+  ```
+
+  `scroll`, `scroll_screen`, `scroll_until` and `scroll_collect` all take the
+  content-direction; only `swipe` takes finger motion. `"left"`/`"right"` work
+  on both.
+
+  **Use `scroll` for anything scrollable.** On macOS 26 a vertical touch-drag is
+  dropped, so `swipe("up")`/`swipe("down")` move nothing in a list or a feed --
+  measured on Settings and on TikTok. Horizontal still works, so `swipe("left")`
+  / `swipe("right")` remain the way to flip Home Screen pages and carousels,
+  which a scroll cannot do.
+
+  **Breaking change for `scroll`:** it used to take finger motion too, so the
+  old `scroll("up")` is today's `scroll("down")`. `swipe` is unchanged.
 - **Scrolling**: `scroll(direction, amount, at=...)` for one gesture;
   `scroll_until(done)` to stop when your predicate on the visible OCR is met;
   `scroll_collect(extract, key=...)` to walk a list, de-duping as it goes.

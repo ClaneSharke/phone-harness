@@ -305,23 +305,33 @@ def _delta(direction, amount, win):
 
 
 def swipe(direction, distance=0.4, at=None):
-    """swipe('up'|'down'|'left'|'right') — a momentum touch-drag, centred.
+    """swipe('up'|'down'|'left'|'right') — a momentum touch-drag.
 
-    `direction` is what you want to SEE, matching scroll(): swipe('down')
-    reveals content further down, swipe('right') what is off to the right.
-    This used to mean finger motion, which is the opposite; the two verbs
-    disagreeing on the same word was a trap worth removing.
+    `direction` is FINGER MOTION, which is the opposite of scroll()'s: this is
+    the one place the two verbs deliberately disagree, because English does.
+    "swipe up for the next video" means the thumb goes up; "scroll down the
+    page" means show me what is below. Both describe the same outcome, and
+    each function follows the convention its own word already carries.
+
+        swipe("up")     thumb up    (how everyone says "next")
+        scroll("down")  see below
+
+    Use scroll() for anything scrollable. On macOS 26 a vertical touch-drag is
+    dropped by iPhone Mirroring, so swipe("up")/swipe("down") move nothing in a
+    list or a feed -- measured on Settings and on TikTok. Horizontal survives,
+    so swipe("left")/swipe("right") stay the way to flip Home Screen pages and
+    carousels, which a scroll cannot do.
+
+    `at` aims the gesture; defaults to the window centre.
     """
     w = _win()
     cx, cy = _point(at, w)
-    sx, sy = _DIRECTIONS.get(direction, (0, 0))
-    # The finger travels the same way as the scroll delta: to bring content
-    # from further down into view, the finger moves up the screen.
-    dx = sx * w["w"] * distance
-    dy = sy * w["h"] * distance
+    dx = {"left": -1, "right": 1}.get(direction, 0) * w["w"] * distance
+    dy = {"up": -1, "down": 1}.get(direction, 0) * w["h"] * distance
     if not dx and not dy:
         raise ValueError(
-            f"direction must be one of {sorted(_DIRECTIONS)}, got {direction!r}")
+            f"direction must be one of ['down', 'left', 'right', 'up'], "
+            f"got {direction!r}")
     # Fast, short drag = a momentum flick. A slow drag barely registers on iOS
     # (it won't even flip a Home-Screen page); the flick is what snaps pages
     # and carousels. For scrolling lists use scroll()/scroll_collect() instead.
