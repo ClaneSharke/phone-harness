@@ -376,41 +376,29 @@ def _overlap(a, b):
     return len(a & b) / len(a | b)
 
 
-def _profile():
-    """Row-brightness profile of the current screen, for motion measurement."""
-    from . import motion
-    return motion.profile(screenshot())
-
-
 def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
                   at=None):
     """One scroll gesture, then wait for the screen to settle (so a lazy-load
     spinner resolves before we judge movement).
 
-    Returns raw observations. No judgement, no thresholds:
+    Returns what is on screen afterwards, and what was there before:
 
-      dy       pixels the content translated (motion.py), signed
-      match    how well a translation of dy explains the change, -1..1
-      overlap  Jaccard overlap of the OCR text before and after
-      before / after / boxes   the text, and the settled content to parse
+      before / after   the OCR text sets
+      overlap          Jaccard overlap of the two
+      boxes            the settled content, ready to parse
 
-    Whether the scroll "worked" is yours to decide, because only you know what
-    you were after: a list wants translation, a feed wants a different video,
-    an hourly strip wants later hours. Every cutoff this function could apply
-    would be right for one of those and wrong for the others -- measured, three
-    separate times, on this phone. So it reports and you judge.
+    It does not tell you whether the scroll "worked", because only you know
+    what you were after: a list wants translation, a feed wants a different
+    video, an hourly strip wants later hours. Judge from the content you
+    expected. If you want to see the screen, take a screenshot -- looking at it
+    beats any number this could invent.
 
-    If you want the old rule of thumb, `motion.verdict()` turns dy and match
-    into scrolled/still/replaced. Nothing here calls it for you.
-
-    `moved_thresh` is accepted and ignored; it tuned the old text-overlap test.
+    `moved_thresh` is accepted and ignored; it tuned an old text-overlap test.
     """
     w = _win()
-    from . import motion
     dx, dy = _delta(direction, amount, w)
     px, py = _point(at, w)
 
-    before_prof = _profile()
     before = _text_set(_content_texts())
 
     send("input.scroll", x=px, y=py, dx=dx, dy=dy, steps=10)
@@ -428,10 +416,8 @@ def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
         time.sleep(0.25)
         boxes = _content_texts()
 
-    m = motion.compare(before_prof, _profile())
     after = _text_set(boxes)
-    return {"dy": m["dy"], "match": m["match"],
-            "overlap": round(_overlap(before, after), 3),
+    return {"overlap": round(_overlap(before, after), 3),
             "before": before, "after": after, "boxes": boxes}
 
 
@@ -511,7 +497,7 @@ def scroll_collect(extract=None, key=None, direction="down", amount=0.6,
         res = scroll_screen(direction, amount, settle, at=at)
         new = ingest(res["boxes"])
         if on_progress:
-            on_progress(i, len(order), new, res["dy"], res["overlap"])
+            on_progress(i, len(order), new, res["overlap"])
         if new:
             stale = 0
         else:

@@ -94,11 +94,11 @@ PY
   `stop` of `'reached-end'` or `'max-scrolls'`. Both end on YOUR check, so an
   extractor that misses rows will end the walk early — make it robust before
   blaming the scroll.
-  `scroll_screen()` is the single-step primitive and returns raw observations
-  (`dy`, `match`, `overlap`, `before`, `after`, `boxes`); what counts as a
-  successful scroll is yours to decide, because it differs per app — a list
-  translates, a feed swaps to the next item, an inner strip moves while the
-  rest of the screen holds still.
+  `scroll_screen()` is the single-step primitive and returns what is on screen
+  (`before`, `after`, `overlap`, `boxes`); what counts as a successful scroll
+  is yours to decide, because it differs per app — a list translates, a feed
+  swaps to the next item, an inner strip moves while the rest of the screen
+  holds still. To see what happened, take a `screenshot()` and look at it.
   `at` aims the gesture. Only the scroll view under that point moves, so pass
   it whenever the thing you want to scroll is not the full-screen list.
 - Raw Quartz is the escape hatch: `import Quartz` in your script for anything
