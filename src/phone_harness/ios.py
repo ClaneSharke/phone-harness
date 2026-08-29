@@ -92,8 +92,8 @@ class IPhone(Backend):
     def _input_drag(self, x1, y1, x2, y2, duration=0.35, steps=14):
         self.mirror.drag(x1, y1, x2, y2, duration=duration, steps=steps)
 
-    def _input_scroll(self, x, y, dy, steps=6):
-        self.mirror.scroll_wheel(dy, x, y, steps=steps)
+    def _input_scroll(self, x, y, dy, dx=0, steps=6):
+        self.mirror.scroll_wheel(dy, x, y, steps=steps, dx=dx)
 
     def _input_keys(self, combo):
         self.mirror.press(combo)

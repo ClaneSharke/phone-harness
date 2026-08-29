@@ -28,7 +28,7 @@ nothing in common — so the shared layer is this vocabulary instead.
     input.tap           x, y
     input.press         x, y, duration              long press
     input.drag          x1, y1, x2, y2, duration, steps
-    input.scroll        x, y, dy, steps             +dy scrolls content up
+    input.scroll        x, y, dy, dx, steps         content-space deltas
     input.keys          combo
     input.text          s, delay, keystrokes
 

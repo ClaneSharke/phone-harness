@@ -259,15 +259,79 @@ def _win():
     return send("screen.require")
 
 
-def swipe(direction, distance=0.4):
-    """swipe('up'|'down'|'left'|'right') — a touch-drag centered on screen.
-    Direction is finger motion: swipe('up') moves content up (scrolls down)."""
+# Directions name WHAT YOU WANT TO SEE, not which way a finger moves. Finger
+# metaphors invert with the Mac's natural-scroll setting and with whoever is
+# describing them; "show me what is further down the list" does not.
+#
+#   down  -> reveal content further down     up    -> reveal content above
+#   right -> reveal content further right    left  -> reveal content to the left
+#
+# Verified independent of com.apple.swipescrolldirection: the same deltas move
+# the phone the same way whether natural scrolling is on or off.
+# The tuple is the (dx, dy) SIGN sent to input.scroll to achieve that reveal.
+# A negative dy reveals content further down: the same convention the old
+# {"up": -1} table used, just named after the result instead of the finger.
+_DIRECTIONS = {"down": (0, -1), "up": (0, 1), "right": (-1, 0), "left": (1, 0)}
+
+
+def _point(at, win):
+    """Where the gesture is aimed. Defaults to the window centre.
+
+    The centre is fine for a full-screen list and wrong for everything else: a
+    horizontal strip, a carousel, an inner scroll view, a sheet over a page.
+    Aiming at the centre of Weather hits the temperature readout, which does
+    not scroll, while the hourly strip below it does.
+
+    `at` may be (x, y) in screen points, or any box from ocr()/find_text()/
+    find_nodes() — so `scroll("right", at=find_text("Now")[0])` reads the way
+    you would say it.
+    """
+    if at is None:
+        return win["x"] + win["w"] / 2, win["y"] + win["h"] / 2
+    if isinstance(at, dict):
+        return at["x"], at["y"]
+    x, y = at
+    return x, y
+
+
+def _delta(direction, amount, win):
+    try:
+        sx, sy = _DIRECTIONS[direction]
+    except KeyError:
+        raise ValueError(
+            f"direction must be one of {sorted(_DIRECTIONS)}, got {direction!r}"
+        ) from None
+    return int(sx * win["w"] * amount), int(sy * win["h"] * amount)
+
+
+def swipe(direction, distance=0.4, at=None):
+    """swipe('up'|'down'|'left'|'right') — a momentum touch-drag.
+
+    `direction` is FINGER MOTION, which is the opposite of scroll()'s: this is
+    the one place the two verbs deliberately disagree, because English does.
+    "swipe up for the next video" means the thumb goes up; "scroll down the
+    page" means show me what is below. Both describe the same outcome, and
+    each function follows the convention its own word already carries.
+
+        swipe("up")     thumb up    (how everyone says "next")
+        scroll("down")  see below
+
+    Use scroll() for anything scrollable. On macOS 26 a vertical touch-drag is
+    dropped by iPhone Mirroring, so swipe("up")/swipe("down") move nothing in a
+    list or a feed -- measured on Settings and on TikTok. Horizontal survives,
+    so swipe("left")/swipe("right") stay the way to flip Home Screen pages and
+    carousels, which a scroll cannot do.
+
+    `at` aims the gesture; defaults to the window centre.
+    """
     w = _win()
-    cx, cy = w["x"] + w["w"] / 2, w["y"] + w["h"] / 2
+    cx, cy = _point(at, w)
     dx = {"left": -1, "right": 1}.get(direction, 0) * w["w"] * distance
     dy = {"up": -1, "down": 1}.get(direction, 0) * w["h"] * distance
     if not dx and not dy:
-        raise ValueError(f"unknown direction {direction!r}")
+        raise ValueError(
+            f"direction must be one of ['down', 'left', 'right', 'up'], "
+            f"got {direction!r}")
     # Fast, short drag = a momentum flick. A slow drag barely registers on iOS
     # (it won't even flip a Home-Screen page); the flick is what snaps pages
     # and carousels. For scrolling lists use scroll()/scroll_collect() instead.
@@ -275,12 +339,22 @@ def swipe(direction, distance=0.4):
          duration=0.12, steps=6)
 
 
-def scroll(amount=300):
-    """Scroll at screen center. Positive scrolls content down the way a
-    trackpad two-finger-up does; use swipe() when momentum matters."""
+def scroll(direction="down", amount=0.3, at=None):
+    """Scroll the screen. `direction` is what you want to SEE:
+    'down' reveals content further down the list, 'right' what is off to the
+    right. `amount` is a fraction of the screen.
+
+    `at` aims the gesture — (x, y) or a box from ocr()/find_text(). Only the
+    scroll view under that point moves, so pass it whenever the thing you want
+    to scroll is not the full-screen list: a horizontal strip, a carousel, an
+    inner list. Defaults to the window centre.
+
+    Use swipe() when momentum matters.
+    """
     w = _win()
-    send("input.scroll", x=w["x"] + w["w"] / 2, y=w["y"] + w["h"] / 2,
-         dy=-amount)
+    dx, dy = _delta(direction, amount, w)
+    px, py = _point(at, w)
+    send("input.scroll", x=px, y=py, dx=dx, dy=dy)
 
 
 # --- scrolling through lists ------------------------------------------------
@@ -305,52 +379,59 @@ def _text_set(boxes):
     return frozenset(o["text"].strip() for o in boxes if o["text"].strip())
 
 
-def _overlap(a, b):
-    """Jaccard overlap of two text sets: ~1.0 = same screen, low = it moved."""
-    if not a or not b:
-        return 0.0
-    return len(a & b) / len(a | b)
-
-
-def scroll_screen(direction="up", amount=0.6, settle=2.5, moved_thresh=0.6):
+def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
+                  at=None):
     """One scroll gesture, then wait for the screen to settle (so a lazy-load
     spinner resolves before we judge movement).
 
-    Returns {moved, overlap, before, after, boxes} — `boxes` is the settled
-    content, ready to parse. `moved` is False when overlap >= moved_thresh:
-    the list didn't advance. The default 0.6 sits in the empirical gap between
-    real forward progress (overlap < ~0.45) and overscroll bounce at a
-    boundary (overlap > ~0.7), which springs the content and would otherwise
-    read as movement and defeat end-detection.
+    Returns what is on screen afterwards, and what was there before:
+
+      before / after   the OCR text sets
+      boxes            the settled content, ready to parse
+
+    Nothing here compares them for you. It used to return a Jaccard overlap of
+    the two sets, which is a comparison this function picked on your behalf --
+    and it was wrong in exactly the case it mattered, reporting "completely
+    different" for two screens that both had no readable text. Compare them
+    however suits what you asked for, or take a screenshot and look.
+
+    `moved_thresh` is accepted and ignored; it tuned an old text-overlap test.
     """
     w = _win()
-    sign = {"up": -1, "down": 1}.get(direction)  # 'up' reveals content below
-    if sign is None:
-        raise ValueError(f"direction must be 'up' or 'down', got {direction!r}")
+    dx, dy = _delta(direction, amount, w)
+    px, py = _point(at, w)
+
     before = _text_set(_content_texts())
-    send("input.scroll", x=w["x"] + w["w"] / 2, y=w["y"] + w["h"] / 2,
-         dy=sign * int(w["h"] * amount), steps=10)
+
+    send("input.scroll", x=px, y=py, dx=dx, dy=dy, steps=10)
     time.sleep(0.4)
-    prev_boxes, prev = None, None
-    deadline = time.time() + settle
+
+    # Settle: wait until two reads of the content are IDENTICAL, or the
+    # caller's window runs out. Exact equality, so there is nothing to tune --
+    # a screen that never settles (a playing video) simply uses its budget.
+    boxes, prev_set, deadline = _content_texts(), None, time.time() + settle
     while time.time() < deadline:
-        boxes = _content_texts()
-        cur = _text_set(boxes)
-        if cur == prev:                 # two identical reads = settled
+        cur_set = _text_set(boxes)
+        if cur_set == prev_set:
             break
-        prev, prev_boxes = cur, boxes
-        time.sleep(0.35)
-    after = prev or frozenset()
-    return {"moved": _overlap(before, after) < moved_thresh,
-            "overlap": round(_overlap(before, after), 3),
-            "before": before, "after": after, "boxes": prev_boxes or []}
+        prev_set = cur_set
+        time.sleep(0.25)
+        boxes = _content_texts()
+
+    return {"before": before, "after": _text_set(boxes), "boxes": boxes}
 
 
-def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
-    """Scroll until `done(boxes)` is truthy or the list stops moving.
+def scroll_until(done, direction="down", amount=0.6, max_scrolls=60,
+                 settle=2.5, at=None):
+    """Scroll until `done(boxes)` is truthy, or the screen stops changing.
 
     `done` receives the current content and returns a truthy value to stop;
     that value is returned. Returns None if the end is reached first.
+
+    YOUR predicate decides success. The stop condition is only ever "the screen
+    stopped changing" — never a guess about whether a scroll counts as a scroll,
+    because that depends on the app: a list translates, a feed swaps to the next
+    item, and both are progress.
     """
     boxes = _content_texts()
     hit = done(boxes)
@@ -358,31 +439,40 @@ def scroll_until(done, direction="up", amount=0.6, max_scrolls=60, settle=2.5):
         return hit
     stale = 0
     for _ in range(max_scrolls):
-        res = scroll_screen(direction, amount, settle)
+        res = scroll_screen(direction, amount, settle, at=at)
         hit = done(res["boxes"])
         if hit:
             return hit
-        if res["moved"]:
+        if res["after"] != res["before"]:
             stale = 0
         else:
             stale += 1
-            if stale >= 2:              # confirmed still after a retry
+            if stale >= 2:      # the content came back byte-identical twice
                 return None
             time.sleep(0.8)
             activate()
     return None
 
 
-def scroll_collect(extract=None, key=None, direction="up", amount=0.6,
-                   max_scrolls=400, end_after=3, settle=2.5, on_progress=None):
+def scroll_collect(extract=None, key=None, direction="down", amount=0.6,
+                   max_scrolls=400, end_after=3, settle=2.5, on_progress=None,
+                   at=None):
     """Scroll a list top-to-bottom, extracting and de-duping items each screen,
     until the list reaches its true end.
 
+    - on_progress(scroll_index, total_items, new_items) if you want a running
+      count.
     - extract(boxes) -> list of items for the current screen. Default returns
       each content text line, so a bare scroll_collect() gathers all text.
     - key(item) -> hashable de-dup key (default: the item itself).
-    - Stops after `end_after` consecutive non-moving scrolls (the settle window
-      already gave lazy-load a chance), or `max_scrolls`.
+    - Stops after `end_after` consecutive scrolls that yield NO NEW ITEMS (the
+      settle window already gave lazy-load a chance), or `max_scrolls`.
+
+    The end condition is your extractor running dry, not a pixel judgement
+    about whether a scroll counts as a scroll. That works on a list, which
+    translates, and on a feed, which swaps to the next item -- both are
+    progress, and only your extractor knows whether progress produced anything
+    you wanted.
 
     Returns {items, stop, scrolls}. `stop` is 'reached-end' or 'max-scrolls'.
     Use amount < 1.0 so screens overlap and no row falls between captures.
@@ -406,11 +496,11 @@ def scroll_collect(extract=None, key=None, direction="up", amount=0.6,
     ingest(_content_texts())
     stale = 0
     for i in range(1, max_scrolls + 1):
-        res = scroll_screen(direction, amount, settle)
+        res = scroll_screen(direction, amount, settle, at=at)
         new = ingest(res["boxes"])
         if on_progress:
-            on_progress(i, len(order), new, res["moved"], res["overlap"])
-        if res["moved"]:
+            on_progress(i, len(order), new)
+        if new:
             stale = 0
         else:
             stale += 1
