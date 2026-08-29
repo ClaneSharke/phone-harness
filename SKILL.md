@@ -118,7 +118,7 @@ PY
   extractor that misses rows will end the walk early — make it robust before
   blaming the scroll.
   `scroll_screen()` is the single-step primitive and returns what is on screen
-  (`before`, `after`, `overlap`, `boxes`); what counts as a successful scroll
+  (`before`, `after`, `boxes`); what counts as a successful scroll
   is yours to decide, because it differs per app — a list translates, a feed
   swaps to the next item, an inner strip moves while the rest of the screen
   holds still. To see what happened, take a `screenshot()` and look at it.

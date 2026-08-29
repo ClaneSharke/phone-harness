@@ -379,13 +379,6 @@ def _text_set(boxes):
     return frozenset(o["text"].strip() for o in boxes if o["text"].strip())
 
 
-def _overlap(a, b):
-    """Jaccard overlap of two text sets: ~1.0 = same screen, low = it moved."""
-    if not a or not b:
-        return 0.0
-    return len(a & b) / len(a | b)
-
-
 def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
                   at=None):
     """One scroll gesture, then wait for the screen to settle (so a lazy-load
@@ -394,14 +387,13 @@ def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
     Returns what is on screen afterwards, and what was there before:
 
       before / after   the OCR text sets
-      overlap          Jaccard overlap of the two
       boxes            the settled content, ready to parse
 
-    It does not tell you whether the scroll "worked", because only you know
-    what you were after: a list wants translation, a feed wants a different
-    video, an hourly strip wants later hours. Judge from the content you
-    expected. If you want to see the screen, take a screenshot -- looking at it
-    beats any number this could invent.
+    Nothing here compares them for you. It used to return a Jaccard overlap of
+    the two sets, which is a comparison this function picked on your behalf --
+    and it was wrong in exactly the case it mattered, reporting "completely
+    different" for two screens that both had no readable text. Compare them
+    however suits what you asked for, or take a screenshot and look.
 
     `moved_thresh` is accepted and ignored; it tuned an old text-overlap test.
     """
@@ -426,9 +418,7 @@ def scroll_screen(direction="down", amount=0.6, settle=2.5, moved_thresh=None,
         time.sleep(0.25)
         boxes = _content_texts()
 
-    after = _text_set(boxes)
-    return {"overlap": round(_overlap(before, after), 3),
-            "before": before, "after": after, "boxes": boxes}
+    return {"before": before, "after": _text_set(boxes), "boxes": boxes}
 
 
 def scroll_until(done, direction="down", amount=0.6, max_scrolls=60,
@@ -470,6 +460,8 @@ def scroll_collect(extract=None, key=None, direction="down", amount=0.6,
     """Scroll a list top-to-bottom, extracting and de-duping items each screen,
     until the list reaches its true end.
 
+    - on_progress(scroll_index, total_items, new_items) if you want a running
+      count.
     - extract(boxes) -> list of items for the current screen. Default returns
       each content text line, so a bare scroll_collect() gathers all text.
     - key(item) -> hashable de-dup key (default: the item itself).
@@ -507,7 +499,7 @@ def scroll_collect(extract=None, key=None, direction="down", amount=0.6,
         res = scroll_screen(direction, amount, settle, at=at)
         new = ingest(res["boxes"])
         if on_progress:
-            on_progress(i, len(order), new, res["overlap"])
+            on_progress(i, len(order), new)
         if new:
             stale = 0
         else:
