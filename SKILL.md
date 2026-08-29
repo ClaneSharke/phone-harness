@@ -59,8 +59,11 @@ PY
   1. **Name what should change** before you act — a title, a row, a username,
      a field's contents. If you cannot name it, you cannot tell success from a
      no-op, and most phone failures are silent no-ops.
-  2. **Do one action**, then check that one thing (`wait_stable()`, then
-     `ocr()` / `screenshot()` / your own predicate).
+  2. **Do one action**, then check that one thing. How you check is yours:
+     `ocr()` is cheap and gives every visible string with a tap-ready point;
+     `screenshot()` costs more but shows you everything OCR cannot read —
+     icons, images, whether a row is highlighted. Use the cheap one in a loop
+     and look at an image when you are stuck or when the answer is visual.
   3. **Once a sequence is proven, batch it** — a whole sub-task in one
      invocation is much faster than a call per turn. Batch what you have
      already watched work, and keep one cheap check at the end.
@@ -70,10 +73,18 @@ PY
   5. **Keep what you learn**: put reusable checks and fixed-up steps in
      `agent-workspace/agent_helpers.py` so the next task starts ahead.
 
-- **The harness reports, you decide.** Helpers return observations —
-  coordinates, text, pixel deltas — never a verdict on whether your intent was
-  achieved. Only you know what you were after, so judge from the content you
-  expected, not from a number looking big or small.
+- **The harness reports, you decide.** Helpers hand back observations — text,
+  coordinates, what was on screen before and after — and never a verdict on
+  whether your intent was achieved. Only you know what you were after, so judge
+  from the content you expected.
+
+  `ocr()` and `screenshot()` are the observation surface, and what you do with
+  them is entirely your call: diff two OCR sets, watch one label, count rows,
+  compare a crop, poll until something appears. The harness deliberately does
+  not pick a comparison for you — it tried, and every rule that fit a list
+  broke on a feed, and every rule that fit a feed broke on a strip that scrolls
+  inside a still screen. Write the check that matches what you asked for, and
+  put it in `agent_helpers.py` when it turns out to be reusable.
 - Navigation: `home()`, `app_switcher()`, `open_app("Notes")` (Spotlight),
   `scroll("down")`, `swipe("up")`, `type_text("...")`, `press("return")`,
   `long_press(x, y)`.
