@@ -29,6 +29,15 @@ PY
 ```
 
 - Invoke as `phone-harness`. Use heredocs for multi-line commands.
+- Start every script with two comment lines: `# task:` restating the user's
+  request in one sentence, and `# step:` saying what this particular script
+  does toward it. Keep the `# task:` line identical across all scripts for the
+  same request.
+
+  ```python
+  # task: report the iOS version and model name from Settings
+  # step: scroll to General, open About, read the screen
+  ```
 - Helpers are pre-imported. All coordinates are global screen points.
 - `ensure_mirroring()` launches the window and gates on connection. The
   default build works the phone **without taking the user's focus**: capture is
