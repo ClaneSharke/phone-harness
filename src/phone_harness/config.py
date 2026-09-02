@@ -9,6 +9,7 @@ Two kinds of thing, kept apart because they live differently:
            primary, the pid of a running awake session. Machine-managed,
            rebuildable, never worth backing up.
              ~/.local/state/phone-harness/devices.json
+             ~/.local/state/phone-harness/telemetry.json
              ~/.local/state/phone-harness/run/awake.pid
 
 XDG_CONFIG_HOME / XDG_STATE_HOME are honoured; PHONE_HARNESS_HOME moves both
@@ -33,6 +34,7 @@ VERSION = 1
 
 DEFAULTS = {
     "platform": "ios",
+    "telemetry": True,         # anonymous usage events; `config set telemetry false`
     "android": {
         "adb": "adb",          # the binary; a path if it is not on PATH
         "poke_every": 25,      # seconds between keep-awake pokes
@@ -76,6 +78,7 @@ def run_dir():
 def paths():
     return {"config": config_dir() / "config.json",
             "devices": state_dir() / "devices.json",
+            "telemetry": state_dir() / "telemetry.json",
             "run": run_dir()}
 
 
@@ -236,6 +239,20 @@ def save_devices_of(kind, section):
     data[kind] = {"primary": section.get("primary"),
                   "phones": section.get("phones") or {}}
     _write(paths()["devices"], data)
+
+
+# --- telemetry (state) -------------------------------------------------------
+
+def install_id():
+    """A random id minted once per machine, so runs can be counted without
+    knowing who ran them. Delete the file to get a new one."""
+    import uuid
+    p = paths()["telemetry"]
+    data = _read(p, {})
+    if not isinstance(data.get("install_id"), str):
+        data["install_id"] = str(uuid.uuid4())
+        _write(p, data)
+    return data["install_id"]
 
 
 # --- CLI (phone-harness config ...) -----------------------------------------
