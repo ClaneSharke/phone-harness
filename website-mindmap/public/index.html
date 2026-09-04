@@ -19,6 +19,16 @@
         <button type="button" id="advanced-toggle" aria-expanded="false">Options</button>
         <button type="submit" id="analyze-btn">Analyze</button>
       </form>
+      <div class="theme-switch">
+        <label for="theme-select" class="sr-only">Visual theme</label>
+        <select id="theme-select" title="Visual theme">
+          <option value="auto">🖥️ Auto</option>
+          <option value="dark">🌙 Dark</option>
+          <option value="light">☀️ Light</option>
+          <option value="midnight">🪐 Midnight</option>
+          <option value="aurora">🌊 Aurora</option>
+        </select>
+      </div>
     </header>
 
     <div id="advanced-panel" class="hidden">
@@ -55,7 +65,7 @@
         </div>
         <svg id="canvas"></svg>
         <div id="legend" class="hidden"></div>
-        <div id="tooltip" class="hidden"></div>
+        <div id="tooltip"></div>
         <div id="breadcrumb"></div>
         <div id="stats"></div>
       </div>

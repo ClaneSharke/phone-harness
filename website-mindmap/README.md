@@ -49,7 +49,24 @@ runs; the mind map appears as soon as it finishes.
   (including still-collapsed branches, which auto-expand); press **Enter**
   to jump between matches.
 - **Scroll/drag** to pan and zoom freely at any time.
-- **Hover** a node for its full tag and text/URL in a tooltip.
+- **Hover** a node to preview its branch — the node and its connections light
+  up, everything else fades, and a tooltip shows its full tag and text/URL.
+  Click commits to that focus (with a zoom/pan and a glowing highlight);
+  moving off a node without clicking just clears the preview.
+- **Theme** — the picker at top right offers **Auto** (follows your OS
+  light/dark setting and updates live if it changes), **Dark**, **Light**,
+  **Midnight**, and **Aurora**. Your choice is remembered per-browser.
+
+## Animations
+
+Nodes and links stagger in on first load (outward by depth, so the site root
+draws first), and every subsequent reveal — expanding a node, "Expand all",
+a search match auto-expanding a collapsed branch — pops new circles in from
+nothing rather than snapping into place. Hovering a node grows it slightly
+and previews its branch; clicking commits with a smooth zoom/pan and a
+glowing halo. The site-root node has a gentle idle glow so the map doesn't
+feel static while you read it. All of this respects
+`prefers-reduced-motion: reduce`.
 
 ## Notes & limits
 

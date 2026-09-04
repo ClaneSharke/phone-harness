@@ -81,6 +81,51 @@
   const tooltipEl = $("#tooltip");
   const breadcrumbEl = $("#breadcrumb");
   const statsEl = $("#stats");
+  const themeSelect = $("#theme-select");
+
+  // ---------- theme ----------
+  const THEME_STORAGE_KEY = "website-mindmap-theme";
+  const THEMES = new Set(["auto", "dark", "light", "midnight", "aurora"]);
+  const prefersDarkMq = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function readStoredTheme() {
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      return THEMES.has(stored) ? stored : "auto";
+    } catch {
+      return "auto";
+    }
+  }
+
+  function resolveTheme(pref) {
+    if (pref === "auto") return prefersDarkMq.matches ? "dark" : "light";
+    return pref;
+  }
+
+  function applyTheme(pref) {
+    document.documentElement.setAttribute("data-theme", resolveTheme(pref));
+  }
+
+  function setTheme(pref) {
+    const next = THEMES.has(pref) ? pref : "auto";
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      /* storage may be unavailable (private mode, disabled cookies) */
+    }
+    applyTheme(next);
+    if (themeSelect) themeSelect.value = next;
+  }
+
+  const initialTheme = readStoredTheme();
+  applyTheme(initialTheme);
+  if (themeSelect) {
+    themeSelect.value = initialTheme;
+    themeSelect.addEventListener("change", (e) => setTheme(e.target.value));
+  }
+  prefersDarkMq.addEventListener("change", () => {
+    if (readStoredTheme() === "auto") applyTheme("auto");
+  });
 
   advancedToggle.addEventListener("click", () => {
     const isHidden = advancedPanel.classList.contains("hidden");
@@ -325,7 +370,9 @@
     const nodes = root.descendants();
     const links = root.links();
 
-    const duration = isInitial ? 0 : 500;
+    const duration = 500;
+    const stagger = (d) => (isInitial ? d.target.depth * 60 : 0);
+    const nodeStagger = (d) => (isInitial ? d.depth * 60 : 0);
 
     // ---- links ----
     const linkGen = d3
@@ -348,6 +395,7 @@
       .merge(linkSel)
       .transition()
       .duration(duration)
+      .delay(stagger)
       .attr("d", linkGen);
 
     linkSel
@@ -376,13 +424,19 @@
         event.stopPropagation();
         onNodeClick(d);
       })
-      .on("mouseenter", (event, d) => showTooltip(event, d))
+      .on("mouseenter", (event, d) => {
+        showTooltip(event, d);
+        applyHoverPreview(d);
+      })
       .on("mousemove", (event) => moveTooltip(event))
-      .on("mouseleave", hideTooltip);
+      .on("mouseleave", (event, d) => {
+        hideTooltip();
+        clearHoverPreview();
+      });
 
     nodeEnter
       .append("circle")
-      .attr("r", (d) => baseRadius(d.data.tag))
+      .attr("r", 1e-6)
       .style("--base-r", (d) => `${baseRadius(d.data.tag)}px`)
       .attr("fill", (d) => colorFor(d.data.tag));
 
@@ -401,11 +455,21 @@
       })
       .transition()
       .duration(duration)
+      .delay(nodeStagger)
       .style("opacity", 1)
       .attr("transform", (d) => {
         const [x, y] = radialPoint(d.x, d.y);
         return `translate(${x},${y})`;
       });
+
+    // Pop the circle in from zero radius — plays for every newly-revealed node,
+    // whether that's the first render or a click expanding a branch.
+    nodeMerge
+      .select("circle")
+      .transition()
+      .duration(duration)
+      .delay(nodeStagger)
+      .attr("r", (d) => baseRadius(d.data.tag));
 
     // Nodes are placed via cartesian translate (not a rotated group), so labels stay
     // upright; only the anchor/side flips based on which half of the circle they're on.
@@ -558,7 +622,7 @@
     tooltipEl.innerHTML = `<div class="t-tag">${escapeHtml(tag)}</div><div>${escapeHtml(
       d.data.name || ""
     )}</div>${url}`;
-    tooltipEl.classList.remove("hidden");
+    tooltipEl.classList.add("visible");
     moveTooltip(event);
   }
   function moveTooltip(event) {
@@ -567,7 +631,32 @@
     tooltipEl.style.top = `${event.clientY - wrap.top}px`;
   }
   function hideTooltip() {
-    tooltipEl.classList.add("hidden");
+    tooltipEl.classList.remove("visible");
+  }
+
+  // ---------- hover preview (lightweight focus preview without committing zoom) ----------
+  function applyHoverPreview(d) {
+    if (focusedId) return; // an active click-focus always wins
+    const keep = new Set();
+    keep.add(d.id);
+    d.ancestors().forEach((n) => keep.add(n.id));
+    d.descendants().forEach((n) => keep.add(n.id));
+
+    gNodes
+      .selectAll("g.node")
+      .classed("hover-dim", (n) => !keep.has(n.id))
+      .classed("hover-path", (n) => keep.has(n.id) && n.id !== d.id);
+
+    gLinks
+      .selectAll("path.link")
+      .classed("hover-path", (l) => keep.has(l.source.id) && keep.has(l.target.id))
+      .classed("hover-dim", (l) => !(keep.has(l.source.id) && keep.has(l.target.id)));
+  }
+
+  function clearHoverPreview() {
+    if (focusedId) return;
+    gNodes.selectAll("g.node").classed("hover-dim", false).classed("hover-path", false);
+    gLinks.selectAll("path.link").classed("hover-dim", false).classed("hover-path", false);
   }
 
   function escapeHtml(str) {
