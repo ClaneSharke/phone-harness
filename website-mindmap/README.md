@@ -68,6 +68,19 @@ glowing halo. The site-root node has a gentle idle glow so the map doesn't
 feel static while you read it. All of this respects
 `prefers-reduced-motion: reduce`.
 
+## On a phone
+
+The layout reflows for narrow screens (topbar, toolbar, and legend restack
+instead of overflowing), pinch-to-zoom and drag-to-pan on the map use the
+map's own gesture handling rather than fighting the browser's page zoom, and
+every node has a generous invisible tap target around its visible dot (the
+label next to it isn't clickable, so without this the dot alone — as small
+as 10px — would be the only thing you could hit with a finger).
+
+To reach a server running on your computer from your phone: same Wi-Fi,
+`http://<your-computer's-LAN-IP>:4173`; from anywhere, run a tunnel (e.g.
+`npx ngrok http 4173`) alongside `npm start` and open the URL it gives you.
+
 ## Notes & limits
 
 - This only sees what a plain HTTP fetch returns — it does not run

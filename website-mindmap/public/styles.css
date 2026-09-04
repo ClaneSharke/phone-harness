@@ -264,7 +264,7 @@ button:focus-visible, select:focus-visible, input:focus-visible {
 @keyframes fadeIn { to { opacity: 1; } }
 
 #canvas-wrap { position: absolute; inset: 0; }
-#canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+#canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 #canvas:active { cursor: grabbing; }
 
 #progress-panel:not(.hidden), #canvas-wrap:not(.hidden) { animation: panelIn 0.4s ease; }
@@ -405,10 +405,56 @@ button:focus-visible, select:focus-visible, input:focus-visible {
 .node.match circle { animation: pulse 1.1s ease-in-out infinite; }
 .node.match-current circle { stroke: var(--gold); stroke-width: 3px; }
 
-@media (max-width: 640px) {
-  #topbar { flex-wrap: wrap; }
-  #legend { display: none !important; }
-  #search-input { width: 140px; }
+/* Invisible larger circle behind each node's visible dot, purely to give touch/mouse a
+   generous hit area — labels are pointer-events:none, so without this the tap target on
+   deep nodes can be as small as 10px across. Kept last so it wins any equal-specificity
+   tie against the rules above that also match ".node circle". */
+.node circle.hit-target {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
+@media (max-width: 760px) {
+  #topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 10px 14px;
+  }
+  .brand { order: 1; }
+  .theme-switch { order: 2; margin-left: auto; }
+  #analyze-form {
+    order: 3;
+    flex: 1 1 100%;
+    max-width: none;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  #url-input { flex-basis: 100%; }
+  #analyze-form button { flex: 1; }
+
+  #advanced-panel { flex-wrap: wrap; gap: 10px; padding: 10px 14px; }
+  #advanced-panel .hint { flex-basis: 100%; }
+
+  #toolbar {
+    left: 10px; right: 10px; top: 10px;
+    flex-wrap: wrap;
+  }
+  #search-input { flex-basis: 100%; width: auto; }
+  #toolbar button { flex: 1 1 auto; }
+
+  #legend {
+    top: auto; right: 10px; left: 10px; bottom: 76px;
+    max-width: none; max-height: 32vh; overflow-y: auto;
+    flex-direction: row; flex-wrap: wrap; column-gap: 14px;
+  }
+  #legend .legend-title { flex-basis: 100%; }
+  #legend .legend-row { flex: 1 1 42%; }
+
+  #breadcrumb { left: 10px; bottom: 10px; max-width: calc(100vw - 140px); font-size: 11px; }
+  #stats { right: 10px; bottom: 10px; font-size: 11px; padding: 6px 10px; }
+
+  #tooltip { max-width: 220px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

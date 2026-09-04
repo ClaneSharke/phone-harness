@@ -434,8 +434,17 @@
         clearHoverPreview();
       });
 
+    // Labels are pointer-events:none (see CSS), so the visible dot is the only
+    // clickable area on a node — this invisible, larger circle behind it gives
+    // mouse and touch a real hit target without changing how the node looks.
     nodeEnter
       .append("circle")
+      .attr("class", "hit-target")
+      .attr("r", (d) => Math.max(baseRadius(d.data.tag) + 14, 20));
+
+    nodeEnter
+      .append("circle")
+      .attr("class", "node-dot")
       .attr("r", 1e-6)
       .style("--base-r", (d) => `${baseRadius(d.data.tag)}px`)
       .attr("fill", (d) => colorFor(d.data.tag));
@@ -465,7 +474,7 @@
     // Pop the circle in from zero radius — plays for every newly-revealed node,
     // whether that's the first render or a click expanding a branch.
     nodeMerge
-      .select("circle")
+      .select("circle.node-dot")
       .transition()
       .duration(duration)
       .delay(nodeStagger)
