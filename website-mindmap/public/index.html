@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:," />
+<title>Website Mind Map</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1>Website Mind Map</h1>
+      </div>
+      <form id="analyze-form" autocomplete="off">
+        <input id="url-input" type="text" placeholder="https://example.com" spellcheck="false" required />
+        <button type="button" id="advanced-toggle" aria-expanded="false">Options</button>
+        <button type="submit" id="analyze-btn">Analyze</button>
+      </form>
+    </header>
+
+    <div id="advanced-panel" class="hidden">
+      <label>Max pages
+        <input id="opt-max-pages" type="number" min="1" max="30" value="15" />
+      </label>
+      <label>Crawl depth
+        <input id="opt-max-depth" type="number" min="0" max="3" value="2" />
+      </label>
+      <span class="hint">Depth 0 = start page only. Higher values follow more internal links.</span>
+    </div>
+
+    <main id="stage">
+      <div id="empty-state">
+        <div class="empty-glyph">🕸️</div>
+        <h2>Map any website's structure</h2>
+        <p>Enter a URL above. We'll crawl its pages and turn the layout — headers, nav, sections, headings, and
+          more — into a live, zoomable mind map you can explore.</p>
+      </div>
+
+      <div id="progress-panel" class="hidden">
+        <div class="spinner"></div>
+        <div id="progress-headline">Starting crawl…</div>
+        <ul id="progress-log"></ul>
+      </div>
+
+      <div id="canvas-wrap" class="hidden">
+        <div id="toolbar">
+          <input id="search-input" type="text" placeholder="Search the map… (Enter to jump)" />
+          <button id="reset-view-btn" title="Fit whole map">⤢ Fit</button>
+          <button id="expand-all-btn" title="Expand every node">Expand all</button>
+          <button id="collapse-all-btn" title="Collapse to pages">Collapse</button>
+          <button id="legend-toggle-btn" title="Toggle legend">Legend</button>
+        </div>
+        <svg id="canvas"></svg>
+        <div id="legend" class="hidden"></div>
+        <div id="tooltip" class="hidden"></div>
+        <div id="breadcrumb"></div>
+        <div id="stats"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/vendor/d3.v7.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -3,3 +3,7 @@ __pycache__/
 dist/
 *.egg-info/
 .venv/
+
+# website-mindmap (Node project)
+website-mindmap/node_modules/
+website-mindmap/public/vendor/*.js
