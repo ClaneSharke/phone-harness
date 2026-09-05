@@ -28,25 +28,45 @@
           <option value="midnight">🪐 Midnight</option>
           <option value="aurora">🌊 Aurora</option>
         </select>
+        <label for="style-select" class="sr-only">Drawing style</label>
+        <select id="style-select" title="Drawing style">
+          <option value="clean">✳️ Classic</option>
+          <option value="sketch">✏️ Sketch</option>
+          <option value="pencil">🖊️ Pencil</option>
+          <option value="neon">💡 Neon</option>
+          <option value="blueprint">📐 Blueprint</option>
+        </select>
+        <label for="node-shape-select" class="sr-only">Bubble shape</label>
+        <select id="node-shape-select" title="Bubble shape">
+          <option value="circle">⚪ Circles</option>
+          <option value="rect">▢ Rounded rectangles</option>
+          <option value="pill">💊 Pills</option>
+        </select>
       </div>
     </header>
 
     <div id="advanced-panel" class="hidden">
+      <label>Crawl mode
+        <select id="opt-crawl-mode" title="What to discover on each page">
+          <option value="sitemap" selected>Site map (pages + links)</option>
+          <option value="layout">Page layout (full DOM structure)</option>
+        </select>
+      </label>
       <label>Max pages
         <input id="opt-max-pages" type="number" min="1" max="30" value="15" />
       </label>
       <label>Crawl depth
         <input id="opt-max-depth" type="number" min="0" max="3" value="2" />
       </label>
-      <span class="hint">Depth 0 = start page only. Higher values follow more internal links.</span>
+      <span class="hint">Site map: each page's internal/external links and bookmarks, HTTrack-style. Page layout: each page's full header/nav/section/heading/etc. structure. Depth 0 = start page only.</span>
     </div>
 
     <main id="stage">
       <div id="empty-state">
         <div class="empty-glyph">🕸️</div>
         <h2>Map any website's structure</h2>
-        <p>Enter a URL above. We'll crawl its pages and turn the layout — headers, nav, sections, headings, and
-          more — into a live, zoomable mind map you can explore.</p>
+        <p>Enter a URL above. We'll crawl its pages and turn the site structure — pages, links, and bookmarks
+          (or full page layout, via Options) — into a live, zoomable mind map you can explore.</p>
       </div>
 
       <div id="progress-panel" class="hidden">
@@ -60,8 +80,16 @@
           <input id="search-input" type="text" placeholder="Search the map… (Enter to jump)" />
           <button id="reset-view-btn" title="Fit whole map">⤢ Fit</button>
           <button id="expand-all-btn" title="Expand every node">Expand all</button>
+          <button id="expand-next-btn" title="Expand one more level, everywhere">Expand next layer</button>
           <button id="collapse-all-btn" title="Collapse to pages">Collapse</button>
+          <details id="type-filter">
+            <summary id="type-filter-summary">All element types</summary>
+            <div id="type-filter-options"></div>
+          </details>
+          <button id="friendly-names-btn" title="Show plain-language names instead of raw tag/class names" aria-pressed="false">Friendly names</button>
+          <button id="show-urls-btn" title="Show each page's URL path under its title" aria-pressed="false">Show URLs</button>
           <button id="legend-toggle-btn" title="Toggle legend">Legend</button>
+          <button id="report-btn" title="Generate a printable report with a mindmap snapshot per page">Report</button>
         </div>
         <svg id="canvas"></svg>
         <div id="legend" class="hidden"></div>

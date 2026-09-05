@@ -9,7 +9,7 @@ const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/analyze", async (req, res) => {
-  const { url, maxPages, maxDepth } = req.query;
+  const { url, maxPages, maxDepth, mode } = req.query;
 
   if (!url || typeof url !== "string") {
     res.status(400).json({ error: "Missing url query parameter" });
@@ -37,6 +37,7 @@ app.get("/api/analyze", async (req, res) => {
       {
         maxPages: Number(maxPages) || 12,
         maxDepth: maxDepth !== undefined ? Number(maxDepth) : 2,
+        mode: mode === "layout" ? "layout" : "sitemap",
       },
       (progress) => send("progress", progress)
     );
